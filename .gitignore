@@ -1,3 +1,7 @@
+#Everything except .c files
+*
+!*/*.c
+
 # Prerequisites
 *.d
 

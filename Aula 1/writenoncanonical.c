@@ -74,11 +74,9 @@ int main(int argc, char** argv)
     
 
     printf("Enter a message: ");
-    fgets(buf,255,stdin);
+    gets(buf);
 
-    int cnt = strlen(buf);        
-    
-    buf[cnt++] = '\0';
+    int cnt = strlen(buf) + 1; 
     
     res = write(fd,buf,cnt);
     printf("%d bytes written\n", res);
