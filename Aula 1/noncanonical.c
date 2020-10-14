@@ -89,7 +89,7 @@ int main(int argc, char** argv)
     printf("Message resent: %s\n", message);
     printf("%d bytes written\n", res);
 
-
+  
 
   /* 
     O ciclo WHILE deve ser alterado de modo a respeitar o indicado no guião 
