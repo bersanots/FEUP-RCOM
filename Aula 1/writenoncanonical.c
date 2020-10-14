@@ -61,6 +61,7 @@ int checkUA(char* ua[]) {
 		}
 		
 	}
+	return TRUE;
 }
 
 int main(int argc, char** argv)
