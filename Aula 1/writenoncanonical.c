@@ -22,7 +22,12 @@
 #define BCC2 0x00
 
 volatile int STOP=FALSE;
+int alarmFlag = FALSE;
 
+void atende() { // atende alarme
+	printf("alarme # %d\n", conta);
+	alarmFlag=TRUE;
+}
 
 int checkUA(char* ua[]) {
 	
@@ -57,7 +62,7 @@ int checkUA(char* ua[]) {
 		
 	}
 }
-	
+
 int main(int argc, char** argv)
 {
     int fd,c, res;
@@ -105,9 +110,7 @@ int main(int argc, char** argv)
     leitura do(s) pr�ximo(s) caracter(es)
   */
 
-
-
-    tcflush(fd, TCIOFLUSH);
+	tcflush(fd, TCIOFLUSH);
 
     if ( tcsetattr(fd,TCSANOW,&newtio) == -1) {
       perror("tcsetattr");
@@ -115,23 +118,54 @@ int main(int argc, char** argv)
     }
 
     printf("New termios structure set\n");
-
-
+	
 	unsigned char SET[5];
-    SET[0] = FLAG;
-    SET[1] = FIELD_A_SC;
-    SET[2] = CONTROL_SET;
-    SET[3] = SET[1] ^ SET[2];
-    SET[4] = FLAG;
-
+	int tries = 3;
+	char message[255];
+    int index = 0;
+	int correctUA = FALSE;
+	
+	(void) signal(SIGALRM, atende); //criar handler para sigalarm
+	
+	SET[0] = FLAG;
+	SET[1] = FIELD_A_SC;
+	SET[2] = CONTROL_SET;
+	SET[3] = SET[1] ^ SET[2];
+	SET[4] = FLAG;
+	
+	do {
+		
+		res = write(fd, SET, sizeof(SET));
+		
+		alarm(3);
+		
+		while (index < 5 || !alarmFlag) {       /* loop for input */
+			res = read(fd,buf,1);   			/* returns after 5 chars have been input */
+			buf[res]=0;               			/* so we can printf... */
+			//printf(":%s:%d\n", buf, res);
+			message[index++] = buf[0];
+			//if (buf[0]=='\0') STOP=TRUE;
+		}
+		
+		if(index == 5) { //UA foi lido
+			correctUA = checkUA(message);
+		}
+		
+		tries--;
+		
+	}while(tries > 0 || correctUA);
+	
+	
+	/*
 	printf("Message sent:\n");	
 	printf("SET: ");
     for (int i = 0; i < 5; i++){  
       printf("%4X ", SET[i]);
     }
 	printf("\n");
+	*/
 
-	res = write(fd, SET, sizeof(SET));
+	
 
     /*printf("Enter a message: ");
     gets(buf);
@@ -142,16 +176,11 @@ int main(int argc, char** argv)
     printf("%d bytes written\n", res);*/
 
 
-    char message[255];
-    int index = 0;
+    
 	
-    while (index < 5) {       /* loop for input */
-      res = read(fd,buf,1);   /* returns after 5 chars have been input */
-      buf[res]=0;               /* so we can printf... */
-      //printf(":%s:%d\n", buf, res);
-      message[index++] = buf[0];
-      //if (buf[0]=='\0') STOP=TRUE;
-    }
+   
+	
+	
 	
 	printf("\nMessage received:\n");
 	printf("UA: ");
