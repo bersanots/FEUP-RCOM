@@ -32,32 +32,30 @@ void atende() { // atende alarme
 int checkUA(char* ua[]) {
 	
 	for(int i=0; i<5; i++) {
-		switch(i) {
-			case 0:
-				if(ua[i] != FLAG) {
-					return FALSE;
-				}
-				break;
-			case 1:
-				if(ua[i] != FIELD_A_SC) {
-					return FALSE;
-				}
-				break;
-			case 2:
-				if(ua[i] != CONTROL_UA) {
-					return FALSE;
-				}
-				break;
-			case 3:
-				if(ua[i] != BCC1) {
-					return FALSE;
-				}
-				break;
-			case 4:
-				if(ua[i] != FLAG) {
-					return FALSE;
-				}
-				break;
+		if(i == 0){
+			if(ua[i] != FLAG) {
+				return FALSE;
+			}
+		}		
+		else if(i == 1){
+			if(ua[i] != FIELD_A_SC) {
+				return FALSE;
+			}
+		}
+		else if(i == 2) {
+			if(ua[i] != CONTROL_UA) {
+				return FALSE;
+			}
+		}
+		else if(i == 3) {
+			if(ua[i] != BCC1) {
+				return FALSE;
+			}
+		}
+		else if(i == 4) {
+			if(ua[i] != FLAG) {
+				return FALSE;
+			}
 		}
 		
 	}
