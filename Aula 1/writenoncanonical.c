@@ -23,6 +23,41 @@
 
 volatile int STOP=FALSE;
 
+
+int checkUA(char* ua[]) {
+	
+	for(int i=0; i<5; i++) {
+		switch(i) {
+			case 0:
+				if(ua[i] != FLAG) {
+					return FALSE;
+				}
+				break;
+			case 1:
+				if(ua[i] != FIELD_A_SC) {
+					return FALSE;
+				}
+				break;
+			case 2:
+				if(ua[i] != CONTROL_UA) {
+					return FALSE;
+				}
+				break;
+			case 3:
+				if(ua[i] != BCC1) {
+					return FALSE;
+				}
+				break;
+			case 4:
+				if(ua[i] != FLAG) {
+					return FALSE;
+				}
+				break;
+		}
+		
+	}
+}
+	
 int main(int argc, char** argv)
 {
     int fd,c, res;
@@ -109,7 +144,7 @@ int main(int argc, char** argv)
 
     char message[255];
     int index = 0;
-
+	
     while (index < 5) {       /* loop for input */
       res = read(fd,buf,1);   /* returns after 5 chars have been input */
       buf[res]=0;               /* so we can printf... */
@@ -124,6 +159,11 @@ int main(int argc, char** argv)
        printf("%4X ", message[i]);
     }
     printf("\n");
+	
+	
+	
+	
+	
 
     //printf("Message received: %s\n", message);
     //printf("%d bytes received\n", index);
