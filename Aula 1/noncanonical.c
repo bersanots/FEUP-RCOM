@@ -11,6 +11,15 @@
 #define FALSE 0
 #define TRUE 1
 
+#define FLAG 0x7E
+#define CONTROL_SET 0x02
+#define CONTROL_DISC 0x0b
+#define CONTROL_UA 0x07
+#define FIELD_A_SC 0x03
+#define FIELD_A_RC 0x01
+#define BCC1 0x00
+#define BCC2 0x00
+
 volatile int STOP=FALSE;
 
 int main(int argc, char** argv)
@@ -73,21 +82,45 @@ int main(int argc, char** argv)
     char message[255];
     int index = 0;
 
-    while (STOP==FALSE) {       /* loop for input */
+    while (index < 5) {       /* loop for input */
       res = read(fd,buf,1);   /* returns after 5 chars have been input */
       buf[res]=0;               /* so we can printf... */
-      printf(":%s:%d\n", buf, res);
+      //printf(":%s:%d\n", buf, res);
       message[index++] = buf[0];
-      if (buf[0]=='\0') STOP=TRUE;
+      //if (buf[0]=='\0') STOP=TRUE;
     }
 
-    printf("Message received: %s\n", message);
-    printf("%d bytes received\n", index);
+    printf("Message received:\n");
+    printf("SET: ");
+      for (int i = 0; i < 5; i++){
+      printf("%4X ", message[i]);
+    }
+    printf("\n");
+
+    //printf("Message received: %s\n", message);
+    //printf("%d bytes received\n", index);
+
+
+    unsigned char UA[5];
+    UA[0] = FLAG;
+    UA[1] = FIELD_A_SC;
+    UA[2] = CONTROL_UA;
+    UA[3] = UA[1] ^ UA[2];
+    UA[4] = FLAG;
+
+    printf("\nMessage sent:\n");    
+    printf("UA: ");
+    for (int i = 0; i < 5; i++){  
+      printf("%4X ", UA[i]);
+    }
+    printf("\n");
+
+    res = write(fd, UA, sizeof(UA));
 
   
-    res = write(fd,message,index);
-    printf("Message resent: %s\n", message);
-    printf("%d bytes written\n", res);
+    //res = write(fd,message,index);
+    //printf("Message resent: %s\n", message);
+    //printf("%d bytes written\n", res);
 
   
 

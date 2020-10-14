@@ -12,6 +12,15 @@
 #define FALSE 0
 #define TRUE 1
 
+#define FLAG 0x7E
+#define CONTROL_SET 0x02
+#define CONTROL_DISC 0x0b
+#define CONTROL_UA 0x07
+#define FIELD_A_SC 0x03
+#define FIELD_A_RC 0x01
+#define BCC1 0x00
+#define BCC2 0x00
+
 volatile int STOP=FALSE;
 
 int main(int argc, char** argv)
@@ -71,30 +80,53 @@ int main(int argc, char** argv)
     }
 
     printf("New termios structure set\n");
-    
 
-    printf("Enter a message: ");
+
+	unsigned char SET[5];
+    SET[0] = FLAG;
+    SET[1] = FIELD_A_SC;
+    SET[2] = CONTROL_SET;
+    SET[3] = SET[1] ^ SET[2];
+    SET[4] = FLAG;
+
+	printf("Message sent:\n");	
+	printf("SET: ");
+    for (int i = 0; i < 5; i++){  
+      printf("%4X ", SET[i]);
+    }
+	printf("\n");
+
+	res = write(fd, SET, sizeof(SET));
+
+    /*printf("Enter a message: ");
     gets(buf);
 
     int cnt = strlen(buf) + 1; 
     
     res = write(fd,buf,cnt);
-    printf("%d bytes written\n", res);
+    printf("%d bytes written\n", res);*/
 
 
     char message[255];
     int index = 0;
 
-    while (STOP==FALSE) {       /* loop for input */
+    while (index < 5) {       /* loop for input */
       res = read(fd,buf,1);   /* returns after 5 chars have been input */
       buf[res]=0;               /* so we can printf... */
-      printf(":%s:%d\n", buf, res);
+      //printf(":%s:%d\n", buf, res);
       message[index++] = buf[0];
-      if (buf[0]=='\0') STOP=TRUE;
+      //if (buf[0]=='\0') STOP=TRUE;
     }
+	
+	printf("\nMessage received:\n");
+	printf("UA: ");
+    for (int i = 0; i < 5; i++){
+       printf("%4X ", message[i]);
+    }
+    printf("\n");
 
-    printf("Message received: %s\n", message);
-    printf("%d bytes received\n", index);
+    //printf("Message received: %s\n", message);
+    //printf("%d bytes received\n", index);
  
 
   /* 
