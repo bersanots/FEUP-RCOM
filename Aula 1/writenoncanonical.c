@@ -151,6 +151,8 @@ int main(int argc, char** argv)
 			correctUA = checkUA(message);
 		}
 		
+		alarmFlag = FALSE;
+		
 		tries--;
 		
 	}while(tries > 0 || correctUA);
