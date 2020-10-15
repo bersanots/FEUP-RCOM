@@ -148,6 +148,9 @@ int main(int argc, char** argv)
 		
 		if(index == 5) { //UA foi lido
 			correctUA = checkUA(message);
+			while(alarm(3) > 0) {
+				sleep(1);
+			}
 		}
 		
 		alarmFlag = FALSE;
