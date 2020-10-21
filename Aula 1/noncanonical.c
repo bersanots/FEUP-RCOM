@@ -22,27 +22,65 @@
 
 volatile int STOP=FALSE;
 
-int main(int argc, char** argv)
-{
+int lopen(int fd) {
+    
+    unsigned char SET[6], UA[6];
+    unsigned char buf[6];
+    int index = 0, res;
+
+    while (index < 6) {       
+      res = read(fd,buf,1);   
+      buf[res]=0;               
+      SET[index++] = buf[0];
+    }
+    
+    printf("Message Recieved:\n");
+    printf("SET:\n");
+    for(int i=0; i<6; i++) {
+        printf("%4X", SET[i]);    
+    }
+    
+    printf("\n");    
+    
+    UA[0] = FLAG;
+    UA[1] = FIELD_A_SC;
+    UA[2] = CONTROL_UA;
+    UA[3] = UA[1] ^ UA[2];
+    UA[4] = FLAG;
+    UA[6] = '\0';
+    
+    write(fd, UA, sizeof(UA));
+
+    return 0; 
+}
+
+/*
+int lread(int fd, char* buffer) {
+    
+    
+
+
+}
+*/
+int main(int argc, char** argv) {
     int fd,c, res;
     struct termios oldtio,newtio;
     char buf[255];
 
     if ( (argc < 2) || 
-  	     ((strcmp("/dev/ttyS0", argv[1])!=0) && 
-  	      (strcmp("/dev/ttyS1", argv[1])!=0) )) {
+  	     ((strcmp("/dev/ttyS10", argv[1])!=0) && 
+  	      (strcmp("/dev/ttyS11", argv[1])!=0) )) {
       printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
       exit(1);
     }
-
-
+  
   /*
     Open serial port device for reading and writing and not as controlling tty
     because we don't want to get killed if linenoise sends CTRL-C.
   */
-  
     
     fd = open(argv[1], O_RDWR | O_NOCTTY );
+    
     if (fd <0) {perror(argv[1]); exit(-1); }
 
     if ( tcgetattr(fd,&oldtio) == -1) { /* save current port settings */
@@ -60,15 +98,11 @@ int main(int argc, char** argv)
 
     newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
     newtio.c_cc[VMIN]     = 1;   /* blocking read until 5 chars received */
-
-
-
+  
   /* 
     VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a 
     leitura do(s) próximo(s) caracter(es)
   */
-
-
 
     tcflush(fd, TCIOFLUSH);
 
@@ -78,29 +112,33 @@ int main(int argc, char** argv)
     }
 
     printf("New termios structure set\n");
+    
 
+    lopen(fd);
+
+    /*
     char message[255];
     int index = 0;
 
-    while (index < 5) {       /* loop for input */
-      res = read(fd,buf,1);   /* returns after 5 chars have been input */
-      buf[res]=0;               /* so we can printf... */
+    while (index < 5) {*/       /* loop for input */
+      //res = read(fd,buf,1);   /* returns after 5 chars have been input */
+      //buf[res]=0;               /* so we can printf... */
       //printf(":%s:%d\n", buf, res);
-      message[index++] = buf[0];
+      //message[index++] = buf[0];
       //if (buf[0]=='\0') STOP=TRUE;
-    }
-
+    //}
+    /*
     printf("Message received:\n");
     printf("SET: ");
       for (int i = 0; i < 5; i++){
       printf("%4X ", message[i]);
     }
     printf("\n");
-
+    */
     //printf("Message received: %s\n", message);
     //printf("%d bytes received\n", index);
-
-
+    
+    /*
     unsigned char UA[5];
     UA[0] = FLAG;
     UA[1] = FIELD_A_SC;
@@ -116,6 +154,7 @@ int main(int argc, char** argv)
     printf("\n");
 
     res = write(fd, UA, sizeof(UA));
+    */
 
   
     //res = write(fd,message,index);
