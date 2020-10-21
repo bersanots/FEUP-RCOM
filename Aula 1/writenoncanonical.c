@@ -57,7 +57,6 @@ int checkUA(char* ua[]) {
 				return FALSE;
 			}
 		}
-		
 	}
 	return TRUE;
 }
@@ -131,6 +130,7 @@ int main(int argc, char** argv)
 	SET[2] = CONTROL_SET;
 	SET[3] = SET[1] ^ SET[2];
 	SET[4] = FLAG;
+	SET[5] = '\0';
 	
 	do {
 		

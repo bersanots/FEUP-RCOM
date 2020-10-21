@@ -22,46 +22,114 @@
 
 volatile int STOP=FALSE;
 
+int checkSET(char* SET) {
+
+  int i=0;
+
+  while(STOP == FALSE) {
+    if(i == 0) {
+      if(SET[0] != (char) FLAG) {
+        return FALSE;
+      }
+    }
+    else if(i == 1) {
+      if(SET[1] != (char) FIELD_A_SC) {
+        return FALSE;
+      }
+    }
+    else if(i == 2) {
+      if(SET[2] != (char) CONTROL_SET) {
+        return FALSE;
+      }
+    }
+    else if(i == 3) {
+      if(SET[3] != (char) BCC1) {
+        return FALSE;
+      }
+    }
+    else if(i == 4) {
+      if(SET[4] != (char) FLAG) {
+        return FALSE;
+      }
+    }
+    else if(i == 5) {
+      STOP == TRUE;
+    }
+    i++;
+  }
+  return TRUE;
+}
+
 int lopen(int fd) {
     
     unsigned char SET[6], UA[6];
     unsigned char buf[6];
     int index = 0, res;
-
+    
+    printf("Recieving SET...");
     while (index < 6) {       
       res = read(fd,buf,1);   
-      buf[res]=0;               
-      SET[index++] = buf[0];
+      buf[res] = 0;               
+      SET[index++] = buf[0]; 
     }
-    
+
     printf("Message Recieved:\n");
     printf("SET:\n");
-    for(int i=0; i<6; i++) {
+    for(int i=0; i<5; i++) {
         printf("%4X", SET[i]);    
     }
-    
-    printf("\n");    
+    printf("\n"); 
+
+    if(checkSET(SET) == FALSE) {
+      printf("Error recieving SET message!\n");
+      exit(1);
+    }
     
     UA[0] = FLAG;
     UA[1] = FIELD_A_SC;
     UA[2] = CONTROL_UA;
     UA[3] = UA[1] ^ UA[2];
     UA[4] = FLAG;
-    UA[6] = '\0';
-    
-    write(fd, UA, sizeof(UA));
+    UA[5] = 0;
+
+    printf("\nMessage sent:\n");
+	  printf("SET: ");
+    for (int i = 0; i < 5; i++){
+       printf("%4X ", UA[i]);
+    }
+    printf("\n");	
+   
+    printf("Writing UA...");
+    write(fd, UA, 6);
 
     return 0; 
 }
 
-/*
-int lread(int fd, char* buffer) {
-    
-    
+int lread(int fd, char* buffer) {  
+  
+  char *readChar;
+  int index=0;
 
+  while(readChar != '\0') {
+    read(fd, readChar, 1);
+    buffer[index++] = *readChar;
+  }
 
+  index = 0;
+  printf("Message Recieved:\n");
+  printf("I:\n");
+  while(TRUE) {
+    printf("%4X", buffer[index]);
+    if(buffer[index] == '\0') {
+      break;
+    }
+    index++;
+  }
+  printf("\n");
+
+  return 1;
 }
-*/
+
 int main(int argc, char** argv) {
     int fd,c, res;
     struct termios oldtio,newtio;
