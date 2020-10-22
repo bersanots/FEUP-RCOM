@@ -69,6 +69,7 @@ int llopen(int fd) {
   char message[255];
   int index = 0, res;
   int correctUA = FALSE;
+  int readTotalBytes;
 
   unsigned char buf[5];
   unsigned char SET[5];
@@ -79,10 +80,16 @@ int llopen(int fd) {
   SET[3] = SET[1] ^ SET[2];
   SET[4] = FLAG;
 
-  do {
+  int time;
+
+  while(tries > 0 || correctUA) {
 
       printf("Writing SET...");
       res = write(fd, SET, sizeof(SET));
+
+      alarm(3);
+
+      time = alarm(3);
 
       printf("Message sent:\n");
       printf("SET: ");
@@ -91,39 +98,48 @@ int llopen(int fd) {
       }
       printf("\n");
 
-      alarm(3);
-      
       printf("Receiving UA...\n");
-      while (index < 5 || !alarmFlag) {
+      while (index < 5) {
         res = read(fd,buf,1);
+        if(res == -1) {
+          break;
+        }
         buf[res] = 0;
+        readTotalBytes+=res;
         message[index++] = buf[0];
       }
       
-      if(index == 5) { //UA foi lido
-        correctUA = checkUA(message);
-      }
-      
-      if(correctUA == FALSE) {
-        printf("Error reading UA message!\n");
-        while(alarm(3) > 0) {
+      if(res == -1) {
+        printf("UA was not read!\n");
+        while(time = alarm(time)) {
           sleep(1);
         }
+        alarmFlag = FALSE;
+        tries--;
+        continue;
       }
-      else {
-        printf("\nMessage received:\n");
-        printf("UA: ");
-        for (int i = 0; i < 5; i++) {
-          printf("%4X ", message[i]);
+
+      if(readTotalBytes == 5) { //UA foi lido
+        correctUA = checkUA(message);
+        if(correctUA == FALSE) {
+          printf("Error reading UA message!\n");
+          while(time = alarm(time)) {
+            sleep(1);    
+          }
+          alarmFlag = FALSE;
+          tries--;
+          continue;
         }
-        printf("\n");
+        else {
+          printf("\nMessage received:\n");
+          printf("UA: ");
+          for (int i = 0; i < 5; i++) {
+            printf("%4X ", message[i]);
+          }
+          printf("\n");
+        }
       }
-      
-      alarmFlag = FALSE;
-      
-      tries--;
-		
-	  }while(tries > 0 || correctUA);
+    }
 
     return 0;
 }
