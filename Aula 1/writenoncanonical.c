@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <stdio.h>
+#include <signal.h>
 
 #define BAUDRATE B38400
 #define MODEMDEVICE "/dev/ttyS1"
@@ -23,9 +24,10 @@
 
 volatile int STOP=FALSE;
 int alarmFlag = FALSE;
+int conta = 0;
 
 void atende() { // atende alarme
-	printf("alarme # %d\n", conta);
+	printf("alarme # %d\n", ++conta);
 	alarmFlag=TRUE;
 }
 
@@ -59,6 +61,76 @@ int checkUA(char* ua[]) {
 		}
 	}
 	return TRUE;
+}
+
+int llopen(int fd) {
+
+  int tries = 3;
+  char message[255];
+  int index = 0, res;
+  int correctUA = FALSE;
+
+  unsigned char buf[5];
+  unsigned char SET[5];
+
+  SET[0] = FLAG;
+  SET[1] = FIELD_A_SC;
+  SET[2] = CONTROL_SET;
+  SET[3] = SET[1] ^ SET[2];
+  SET[4] = FLAG;
+
+  do {
+
+      printf("Writing SET...");
+      res = write(fd, SET, sizeof(SET));
+
+      printf("Message sent:\n");
+      printf("SET: ");
+      for (int i = 0; i < 5; i++) {
+        printf("%4X ", SET[i]);
+      }
+      printf("\n");
+
+      alarm(3);
+      
+      printf("Receiving UA...\n");
+      while (index < 5 || !alarmFlag) {
+        res = read(fd,buf,1);
+        buf[res] = 0;
+        message[index++] = buf[0];
+      }
+      
+      if(index == 5) { //UA foi lido
+        correctUA = checkUA(message);
+      }
+      
+      if(correctUA == FALSE) {
+        printf("Error reading UA message!\n");
+        while(alarm(3) > 0) {
+          sleep(1);
+        }
+      }
+      else {
+        printf("\nMessage received:\n");
+        printf("UA: ");
+        for (int i = 0; i < 5; i++) {
+          printf("%4X ", message[i]);
+        }
+        printf("\n");
+      }
+      
+      alarmFlag = FALSE;
+      
+      tries--;
+		
+	  }while(tries > 0 || correctUA);
+
+    return 0;
+}
+
+int llwrite(int fd, char* buffer) {  
+
+  return 0;
 }
 
 int main(int argc, char** argv)
@@ -117,36 +189,39 @@ int main(int argc, char** argv)
 
     printf("New termios structure set\n");
 	
-	unsigned char SET[5];
+	(void) signal(SIGALRM, atende); //criar handler para sigalarm
+	
+	llopen(fd);
+	
+	/*unsigned char SET[5];
 	int tries = 3;
 	char message[255];
     int index = 0;
 	int correctUA = FALSE;
 	
-	(void) signal(SIGALRM, atende); //criar handler para sigalarm
 	
 	SET[0] = FLAG;
 	SET[1] = FIELD_A_SC;
 	SET[2] = CONTROL_SET;
 	SET[3] = SET[1] ^ SET[2];
 	SET[4] = FLAG;
-	SET[5] = '\0';
+	SET[5] = '\0';*/
 	
-	do {
+	/*do {
 		
 		res = write(fd, SET, sizeof(SET));
 		
-		alarm(3);
+		alarm(3);*/
 		
-		while (index < 5 || !alarmFlag) {       /* loop for input */
-			res = read(fd,buf,1);   			/* returns after 5 chars have been input */
-			buf[res]=0;               			/* so we can printf... */
+		//while (index < 5 || !alarmFlag) {       /* loop for input */
+			//res = read(fd,buf,1);   			/* returns after 5 chars have been input */
+			//buf[res]=0;               			/* so we can printf... */
 			//printf(":%s:%d\n", buf, res);
-			message[index++] = buf[0];
+			//message[index++] = buf[0];
 			//if (buf[0]=='\0') STOP=TRUE;
-		}
+		//}
 		
-		if(index == 5) { //UA foi lido
+		/*if(index == 5) { //UA foi lido
 			correctUA = checkUA(message);
 		}
 		
@@ -160,7 +235,7 @@ int main(int argc, char** argv)
 		
 		tries--;
 		
-	}while(tries > 0 || correctUA);
+	}while(tries > 0 || correctUA);*/
 	
 	
 	/*
@@ -189,12 +264,12 @@ int main(int argc, char** argv)
 	
 	
 	
-	printf("\nMessage received:\n");
+	/*printf("\nMessage received:\n");
 	printf("UA: ");
     for (int i = 0; i < 5; i++){
        printf("%4X ", message[i]);
     }
-    printf("\n");
+    printf("\n");*/
 	
 	
 	
