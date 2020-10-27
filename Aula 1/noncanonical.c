@@ -43,7 +43,7 @@ int checkSET(char* SET) {
       }
     }
     else if(i == 3) {
-      if(SET[3] != (char) BCC1) {
+      if(SET[3] != (char) (FIELD_A_SC ^ CONTROL_SET)) {
         return FALSE;
       }
     }
@@ -62,18 +62,18 @@ int checkSET(char* SET) {
 
 int lopen(int fd) {
     
-    unsigned char SET[6], UA[6];
-    unsigned char buf[6];
+    unsigned char SET[5], UA[5];
+    unsigned char buf[5];
     int index = 0, res;
     
-    printf("Recieving SET...");
-    while (index < 6) {       
+    printf("Receiving SET...");
+    while (index < 5) {       
       res = read(fd,buf,1);   
       buf[res] = 0;               
       SET[index++] = buf[0]; 
     }
 
-    printf("Message Recieved:\n");
+    printf("Message Received:\n");
     printf("SET:\n");
     for(int i=0; i<5; i++) {
         printf("%4X", SET[i]);    
@@ -81,7 +81,7 @@ int lopen(int fd) {
     printf("\n"); 
 
     if(checkSET(SET) == FALSE) {
-      printf("Error recieving SET message!\n");
+      printf("Error receiving SET message!\n");
       exit(1);
     }
     
@@ -90,7 +90,6 @@ int lopen(int fd) {
     UA[2] = CONTROL_UA;
     UA[3] = UA[1] ^ UA[2];
     UA[4] = FLAG;
-    UA[5] = 0;
 
     printf("\nMessage sent:\n");
 	  printf("SET: ");
@@ -100,7 +99,7 @@ int lopen(int fd) {
     printf("\n");	
    
     printf("Writing UA...");
-    write(fd, UA, 6);
+    write(fd, UA, 5);
 
     return 0; 
 }
