@@ -24,9 +24,7 @@ volatile int STOP=FALSE;
 
 int checkSET(char* SET) {
 
-  int i=0;
-
-  while(STOP == FALSE) {
+  for(int i=0; i<5; i++) {
     if(i == 0) {
       if(SET[0] != (char) FLAG) {
         return FALSE;
@@ -52,10 +50,6 @@ int checkSET(char* SET) {
         return FALSE;
       }
     }
-    else if(i == 5) {
-      STOP == TRUE;
-    }
-    i++;
   }
   return TRUE;
 }
@@ -66,7 +60,7 @@ int lopen(int fd) {
     unsigned char buf[5];
     int index = 0, res;
     
-    printf("Receiving SET...");
+    printf("Receiving SET...\n");
     while (index < 5) {       
       res = read(fd,buf,1);   
       buf[res] = 0;               
@@ -90,16 +84,16 @@ int lopen(int fd) {
     UA[2] = CONTROL_UA;
     UA[3] = UA[1] ^ UA[2];
     UA[4] = FLAG;
+	
+    printf("Writing UA...\n");
+    write(fd, UA, sizeof(UA));
 
-    printf("\nMessage sent:\n");
-	  printf("SET: ");
+    printf("Message sent:\n");
+	  printf("UA: ");
     for (int i = 0; i < 5; i++){
        printf("%4X ", UA[i]);
     }
-    printf("\n");	
-   
-    printf("Writing UA...");
-    write(fd, UA, 5);
+    printf("\n");
 
     return 0; 
 }
