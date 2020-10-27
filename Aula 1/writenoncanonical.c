@@ -35,27 +35,27 @@ int checkUA(char* ua[]) {
 	
 	for(int i=0; i<5; i++) {
 		if(i == 0){
-			if(ua[i] != FLAG) {
+			if(ua[i] != (char) FLAG) {
 				return FALSE;
 			}
 		}		
 		else if(i == 1){
-			if(ua[i] != FIELD_A_SC) {
+			if(ua[i] != (char) FIELD_A_SC) {
 				return FALSE;
 			}
 		}
 		else if(i == 2) {
-			if(ua[i] != CONTROL_UA) {
+			if(ua[i] != (char) CONTROL_UA) {
 				return FALSE;
 			}
 		}
 		else if(i == 3) {
-			if(ua[i] != BCC1) {
+			if(ua[i] != (char) (FIELD_A_SC ^ CONTROL_UA)) {
 				return FALSE;
 			}
 		}
 		else if(i == 4) {
-			if(ua[i] != FLAG) {
+			if(ua[i] != (char) FLAG) {
 				return FALSE;
 			}
 		}
