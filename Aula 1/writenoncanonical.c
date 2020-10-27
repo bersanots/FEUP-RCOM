@@ -82,7 +82,7 @@ int llopen(int fd) {
 
   int time;
 
-  while(tries > 0 || correctUA) {
+  while(tries > 0 && !correctUA) {
 
       printf("Writing SET...");
       res = write(fd, SET, sizeof(SET));
