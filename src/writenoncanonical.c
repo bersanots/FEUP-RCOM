@@ -14,13 +14,19 @@
 #define TRUE 1
 
 #define FLAG 0x7E
-#define CONTROL_SET 0x02
+#define CONTROL_SET 0x03
 #define CONTROL_DISC 0x0b
 #define CONTROL_UA 0x07
 #define FIELD_A_SC 0x03
 #define FIELD_A_RC 0x01
-#define BCC1 0x00
-#define BCC2 0x00
+#define SET_BCC (FIELD_A_SC ^ CONTROL_SET)
+#define UA_BCC (FIELD_A_SC ^ CONTROL_UA)
+
+#define CONTROL_PACKET_START 0x02
+#define CONTROL_PACKET_END 0x03
+
+#define FILE_SIZE_FIELD 0x00
+#define FILE_NAME_FIELD 0x01
 
 volatile int STOP=FALSE;
 int alarmFlag = FALSE;
@@ -31,7 +37,7 @@ void atende() { // atende alarme
 	alarmFlag=TRUE;
 }
 
-int checkUA(char* ua[]) {
+int checkUA(char* ua) {
 	
 	for(int i=0; i<5; i++) {
 		if(i == 0){
@@ -84,12 +90,8 @@ int llopen(int fd) {
 
   while(tries > 0 && !correctUA) {
 
-      printf("Writing SET...");
+      printf("Writing SET...\n");
       res = write(fd, SET, sizeof(SET));
-
-      alarm(3);
-
-      time = alarm(3);
 
       printf("Message sent:\n");
       printf("SET: ");
@@ -98,20 +100,24 @@ int llopen(int fd) {
       }
       printf("\n");
 
+      alarm(3);
+
+      time = alarm(3);
+      
       printf("Receiving UA...\n");
       while (index < 5) {
         res = read(fd,buf,1);
-        if(res == -1) {
+        if (res == -1) {
           break;
         }
         buf[res] = 0;
-        readTotalBytes+=res;
+        readTotalBytes += res;
         message[index++] = buf[0];
       }
-      
-      if(res == -1) {
+
+      if (res == -1) {
         printf("UA was not read!\n");
-        while(time = alarm(time)) {
+        while (time = alarm(time)) {
           sleep(1);
         }
         alarmFlag = FALSE;
@@ -119,19 +125,19 @@ int llopen(int fd) {
         continue;
       }
 
-      if(readTotalBytes == 5) { //UA foi lido
+      if (readTotalBytes == 5) { //UA foi lido
         correctUA = checkUA(message);
-        if(correctUA == FALSE) {
+        if (correctUA == FALSE) {
           printf("Error reading UA message!\n");
-          while(time = alarm(time)) {
-            sleep(1);    
+          while (time = alarm(time)) {
+            sleep(1);
           }
           alarmFlag = FALSE;
           tries--;
           continue;
         }
         else {
-          printf("\nMessage received:\n");
+          printf("Message received:\n");
           printf("UA: ");
           for (int i = 0; i < 5; i++) {
             printf("%4X ", message[i]);
@@ -139,12 +145,50 @@ int llopen(int fd) {
           printf("\n");
         }
       }
-    }
+  }
 
-    return 0;
+  return 0;
 }
 
-int llwrite(int fd, char* buffer) {  
+unsigned char *buildControlPacket(unsigned char control, unsigned int fileSize, unsigned char *fileName) {
+  
+  int fileSizeLength = sizeof(fileSize);
+  int fileNameLength = sizeof(fileName);
+  unsigned char *packet = malloc((5 + fileSizeLength + fileNameLength) * sizeof(unsigned char));
+
+  int index = 0;
+
+  packet[index++] = control;                    //C
+
+  packet[index++] = FILE_SIZE_FIELD;            //T1
+  packet[index++] = fileSizeLength;             //L1
+
+  //V1
+  for (int i = fileSizeLength - 1; i >= 0; i--) {
+      packet[index++] = (fileSize >> (8 * i)) & 0xFF;
+  }
+
+  packet[index++] = FILE_NAME_FIELD;            //T2
+  packet[index++] = fileNameLength;             //L2
+
+  //V2
+  for (int i = 0; i < fileNameLength; i++) {
+      packet[index++] = fileName[i];
+  }
+
+  return packet;
+}
+
+int llwrite(int fd, char* buffer, int length) {
+
+  /*int index = 0, res;
+
+  unsigned char message[255];
+
+  
+
+  printf("Writing SET...\n");
+  res = write(fd, message, sizeof(message));*/
 
   return 0;
 }
@@ -196,7 +240,7 @@ int main(int argc, char** argv)
     leitura do(s) pr�ximo(s) caracter(es)
   */
 
-	tcflush(fd, TCIOFLUSH);
+	  tcflush(fd, TCIOFLUSH);
 
     if ( tcsetattr(fd,TCSANOW,&newtio) == -1) {
       perror("tcsetattr");
@@ -204,96 +248,24 @@ int main(int argc, char** argv)
     }
 
     printf("New termios structure set\n");
-	
-	(void) signal(SIGALRM, atende); //criar handler para sigalarm
-	
-	llopen(fd);
-	
-	/*unsigned char SET[5];
-	int tries = 3;
-	char message[255];
-    int index = 0;
-	int correctUA = FALSE;
-	
-	
-	SET[0] = FLAG;
-	SET[1] = FIELD_A_SC;
-	SET[2] = CONTROL_SET;
-	SET[3] = SET[1] ^ SET[2];
-	SET[4] = FLAG;
-	SET[5] = '\0';*/
-	
-	/*do {
-		
-		res = write(fd, SET, sizeof(SET));
-		
-		alarm(3);*/
-		
-		//while (index < 5 || !alarmFlag) {       /* loop for input */
-			//res = read(fd,buf,1);   			/* returns after 5 chars have been input */
-			//buf[res]=0;               			/* so we can printf... */
-			//printf(":%s:%d\n", buf, res);
-			//message[index++] = buf[0];
-			//if (buf[0]=='\0') STOP=TRUE;
-		//}
-		
-		/*if(index == 5) { //UA foi lido
-			correctUA = checkUA(message);
-		}
-		
-		if(correctUA == FALSE) {
-			while(alarm(3) > 0) {
-				sleep(1);
-			}
-		}
-		
-		alarmFlag = FALSE;
-		
-		tries--;
-		
-	}while(tries > 0 || correctUA);*/
-	
-	
-	/*
-	printf("Message sent:\n");	
-	printf("SET: ");
-    for (int i = 0; i < 5; i++){  
-      printf("%4X ", SET[i]);
-    }
-	printf("\n");
-	*/
 
-	
+    (void) signal(SIGALRM, atende); //criar handler para sigalarm
 
-    /*printf("Enter a message: ");
-    gets(buf);
+    llopen(fd);
 
-    int cnt = strlen(buf) + 1; 
-    
-    res = write(fd,buf,cnt);
-    printf("%d bytes written\n", res);*/
+    unsigned char *fileName = "pinguim.gif";
+    unsigned int fileSize = 0x32;
 
+    unsigned char *controlPacket = buildControlPacket(CONTROL_PACKET_START, fileSize, fileName);
+    //llwrite(fd, controlPacket, sizeof(controlPacket));
 
-    
-	
-   
-	
-	
-	
-	/*printf("\nMessage received:\n");
-	printf("UA: ");
-    for (int i = 0; i < 5; i++){
-       printf("%4X ", message[i]);
-    }
-    printf("\n");*/
-	
-	
-	
-	
-	
+    //send message packets
+    //llwrite(fd);
 
-    //printf("Message received: %s\n", message);
-    //printf("%d bytes received\n", index);
+    controlPacket = buildControlPacket(CONTROL_PACKET_END, fileSize, fileName);
+    //llwrite(fd);
+
+    //llclose(fd);
  
 
   /* 

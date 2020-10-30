@@ -12,13 +12,19 @@
 #define TRUE 1
 
 #define FLAG 0x7E
-#define CONTROL_SET 0x02
+#define CONTROL_SET 0x03
 #define CONTROL_DISC 0x0b
 #define CONTROL_UA 0x07
 #define FIELD_A_SC 0x03
 #define FIELD_A_RC 0x01
-#define BCC1 0x00
-#define BCC2 0x00
+#define SET_BCC (FIELD_A_SC ^ CONTROL_SET)
+#define UA_BCC (FIELD_A_SC ^ CONTROL_UA)
+
+#define CONTROL_PACKET_START 0x02
+#define CONTROL_PACKET_END 0x03
+
+#define FILE_SIZE_FIELD 0x00
+#define FILE_NAME_FIELD 0x01
 
 volatile int STOP=FALSE;
 
@@ -54,7 +60,7 @@ int checkSET(char* SET) {
   return TRUE;
 }
 
-int lopen(int fd) {
+int llopen(int fd) {
     
     unsigned char SET[5], UA[5];
     unsigned char buf[5];
@@ -68,9 +74,9 @@ int lopen(int fd) {
     }
 
     printf("Message Received:\n");
-    printf("SET:\n");
-    for(int i=0; i<5; i++) {
-        printf("%4X", SET[i]);    
+    printf("SET: ");
+    for (int i = 0; i < 5; i++) {
+      printf("%4X", SET[i]);
     }
     printf("\n"); 
 
@@ -84,7 +90,7 @@ int lopen(int fd) {
     UA[2] = CONTROL_UA;
     UA[3] = UA[1] ^ UA[2];
     UA[4] = FLAG;
-	
+    
     printf("Writing UA...\n");
     write(fd, UA, sizeof(UA));
 
@@ -98,7 +104,7 @@ int lopen(int fd) {
     return 0; 
 }
 
-int lread(int fd, char* buffer) {  
+int llread(int fd, char* buffer) {  
   
   char *readChar;
   int index=0;
@@ -109,7 +115,7 @@ int lread(int fd, char* buffer) {
   }
 
   index = 0;
-  printf("Message Recieved:\n");
+  printf("Message Received:\n");
   printf("I:\n");
   while(TRUE) {
     printf("%4X", buffer[index]);
@@ -123,7 +129,8 @@ int lread(int fd, char* buffer) {
   return 1;
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv)
+{
     int fd,c, res;
     struct termios oldtio,newtio;
     char buf[255];
@@ -134,7 +141,7 @@ int main(int argc, char** argv) {
       printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
       exit(1);
     }
-  
+
   /*
     Open serial port device for reading and writing and not as controlling tty
     because we don't want to get killed if linenoise sends CTRL-C.
@@ -175,52 +182,7 @@ int main(int argc, char** argv) {
     printf("New termios structure set\n");
     
 
-    lopen(fd);
-
-    /*
-    char message[255];
-    int index = 0;
-
-    while (index < 5) {*/       /* loop for input */
-      //res = read(fd,buf,1);   /* returns after 5 chars have been input */
-      //buf[res]=0;               /* so we can printf... */
-      //printf(":%s:%d\n", buf, res);
-      //message[index++] = buf[0];
-      //if (buf[0]=='\0') STOP=TRUE;
-    //}
-    /*
-    printf("Message received:\n");
-    printf("SET: ");
-      for (int i = 0; i < 5; i++){
-      printf("%4X ", message[i]);
-    }
-    printf("\n");
-    */
-    //printf("Message received: %s\n", message);
-    //printf("%d bytes received\n", index);
-    
-    /*
-    unsigned char UA[5];
-    UA[0] = FLAG;
-    UA[1] = FIELD_A_SC;
-    UA[2] = CONTROL_UA;
-    UA[3] = UA[1] ^ UA[2];
-    UA[4] = FLAG;
-
-    printf("\nMessage sent:\n");    
-    printf("UA: ");
-    for (int i = 0; i < 5; i++){  
-      printf("%4X ", UA[i]);
-    }
-    printf("\n");
-
-    res = write(fd, UA, sizeof(UA));
-    */
-
-  
-    //res = write(fd,message,index);
-    //printf("Message resent: %s\n", message);
-    //printf("%d bytes written\n", res);
+    llopen(fd);
 
   
 
