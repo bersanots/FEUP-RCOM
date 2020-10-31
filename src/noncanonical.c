@@ -23,10 +23,19 @@
 #define CONTROL_PACKET_START 0x02
 #define CONTROL_PACKET_END 0x03
 
+#define DATA_PACKET_START 0x01
+
 #define FILE_SIZE_FIELD 0x00
 #define FILE_NAME_FIELD 0x01
 
+
+
+
 volatile int STOP=FALSE;
+int sucsses
+
+enum DataFrameState{FLAG_RCV A_RCV C_RCV BCC1_RCV D_RCV }
+
 
 int checkSET(char* SET) {
 
@@ -57,6 +66,60 @@ int checkSET(char* SET) {
       }
     }
   }
+  return TRUE;
+}
+
+int checkControlPacket(int size, char* buffer) {
+  
+  for(int i=0; i<size; i++) {
+    if(buffer[1] != (char) CONTROL_PACKET_START) {
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+int checkDataPacket(int size, char* buffer) {
+
+  for(int i=0; i<size; i++) {
+    if(buffer[index] != (char) DATA_PACKET_START) {
+      return FALSE;
+    }
+  }
+
+  return TRUE;
+
+}
+
+int readControlPacket(int fd, char* buffer) {
+
+  char byte;
+  int index = 0;
+
+  while(read(fd, &byte, 1) > 0) {
+    buffer[index++] = byte;
+  }
+
+  if(checkControlPacket(index, buffer)) {
+    return FALSE;
+  } 
+
+  return TRUE; 
+}
+
+int readDataPacket(int fd, char* buffer) {
+
+  char byte;
+  int index;
+
+  while(read(fd, &byte, 1) > 0) {
+    buffer[index++] = byte;
+  }
+
+  if(checkDataPacket(index, buffer)) {
+    return FALSE;
+  }
+
   return TRUE;
 }
 
@@ -106,27 +169,7 @@ int llopen(int fd) {
 
 int llread(int fd, char* buffer) {  
   
-  char *readChar;
-  int index=0;
-
-  while(readChar != '\0') {
-    read(fd, readChar, 1);
-    buffer[index++] = *readChar;
-  }
-
-  index = 0;
-  printf("Message Received:\n");
-  printf("I:\n");
-  while(TRUE) {
-    printf("%4X", buffer[index]);
-    if(buffer[index] == '\0') {
-      break;
-    }
-    index++;
-  }
-  printf("\n");
-
-  return 1;
+  readControlPacket(int fd, char* buffer);
 }
 
 int main(int argc, char** argv)
