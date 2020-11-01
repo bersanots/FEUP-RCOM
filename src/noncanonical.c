@@ -22,6 +22,7 @@
 #define BCC_DISC ()
 
 
+#define DATA_PACKET 0x01
 #define CONTROL_PACKET_START 0x02
 #define CONTROL_PACKET_END 0x03
 
@@ -30,7 +31,12 @@
 #define FILE_SIZE_FIELD 0x00
 #define FILE_NAME_FIELD 0x01
 
+#define MAX_PACKET_SIZE 256
+
 volatile int STOP=FALSE;
+int success;
+
+enum DataFrameState { FLAG_RCV, A_RCV, C_RCV, BCC1_RCV, D_RCV };
 
 
 int checkSET(char* SET) {

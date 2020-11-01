@@ -22,11 +22,14 @@
 #define SET_BCC (FIELD_A_SC ^ CONTROL_SET)
 #define UA_BCC (FIELD_A_SC ^ CONTROL_UA)
 
+#define DATA_PACKET 0x01
 #define CONTROL_PACKET_START 0x02
 #define CONTROL_PACKET_END 0x03
 
 #define FILE_SIZE_FIELD 0x00
 #define FILE_NAME_FIELD 0x01
+
+#define MAX_PACKET_SIZE 256
 
 volatile int STOP=FALSE;
 int alarmFlag = FALSE;
@@ -150,10 +153,10 @@ int llopen(int fd) {
   return 0;
 }
 
-unsigned char *buildControlPacket(unsigned char control, unsigned int fileSize, unsigned char *fileName) {
+unsigned char *buildControlPacket(unsigned char control, off_t fileSize, unsigned char *fileName) {
   
   int fileSizeLength = sizeof(fileSize);
-  int fileNameLength = sizeof(fileName);
+  int fileNameLength = strlen(fileName);
   unsigned char *packet = malloc((5 + fileSizeLength + fileNameLength) * sizeof(unsigned char));
 
   int index = 0;
@@ -175,6 +178,37 @@ unsigned char *buildControlPacket(unsigned char control, unsigned int fileSize, 
   for (int i = 0; i < fileNameLength; i++) {
       packet[index++] = fileName[i];
   }
+
+  return packet;
+}
+
+unsigned char *splitFileData(unsigned char *data, off_t fileSize, int dataPacketNum) {
+
+  int packetSize = MAX_PACKET_SIZE;
+
+  if (dataPacketNum * MAX_PACKET_SIZE > fileSize) {
+    packetSize = dataPacketNum * MAX_PACKET_SIZE - fileSize;
+  }
+
+  unsigned char *packet = malloc(packetSize);
+
+  memcpy(packet, &data[dataPacketNum * MAX_PACKET_SIZE], packetSize);
+
+  return packet;
+}
+
+unsigned char *buildDataPacket(unsigned char *data, int *dataPacketNum) {
+
+  int dataLength = strlen(data);
+  unsigned char *packet = malloc((4 + dataLength) * sizeof(unsigned char));
+
+  packet[0] = DATA_PACKET;                //C
+  packet[1] = (*dataPacketNum)++ % 255;   //N
+  packet[2] = (int)dataLength / 256;      //L2
+  packet[3] = (int)dataLength % 256;      //L1
+
+  //P
+  memcpy(&packet[4], &data, dataLength);
 
   return packet;
 }
@@ -254,16 +288,32 @@ int main(int argc, char** argv)
     llopen(fd);
 
     unsigned char *fileName = "pinguim.gif";
-    unsigned int fileSize = 0x32;
+    off_t fileSize = 3200;
 
     unsigned char *controlPacket = buildControlPacket(CONTROL_PACKET_START, fileSize, fileName);
-    //llwrite(fd, controlPacket, sizeof(controlPacket));
+    //llwrite(fd, controlPacket, strlen(controlPacket));
 
+    unsigned char *file = "abdn1 rfdnwuqowijmsw2198qdubhdvbuwb!_ddueoidb12e/$iwubdiubdeiub";
+    
+    int numPackets = 0;
+    int totalPackets = fileSize / MAX_PACKET_SIZE;
+
+    if(fileSize % MAX_PACKET_SIZE != 0) {
+      totalPackets++;
+    }
+    
     //send message packets
-    //llwrite(fd);
+    while(numPackets < totalPackets) {
+
+      unsigned char *data = splitFileData(file, fileSize, numPackets);
+    
+      unsigned char *dataPacket = buildDataPacket(data, &numPackets);
+
+      //llwrite(fd, dataPacket, strlen(dataPacket));
+    }
 
     controlPacket = buildControlPacket(CONTROL_PACKET_END, fileSize, fileName);
-    //llwrite(fd);
+    //llwrite(fd, controlPacket, strlen(controlPacket));
 
     //llclose(fd);
  
