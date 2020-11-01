@@ -19,6 +19,8 @@
 #define FIELD_A_RC 0x01
 #define SET_BCC (FIELD_A_SC ^ CONTROL_SET)
 #define UA_BCC (FIELD_A_SC ^ CONTROL_UA)
+#define BCC_DISC ()
+
 
 #define CONTROL_PACKET_START 0x02
 #define CONTROL_PACKET_END 0x03
@@ -28,13 +30,7 @@
 #define FILE_SIZE_FIELD 0x00
 #define FILE_NAME_FIELD 0x01
 
-
-
-
 volatile int STOP=FALSE;
-int sucsses
-
-enum DataFrameState{FLAG_RCV A_RCV C_RCV BCC1_RCV D_RCV }
 
 
 int checkSET(char* SET) {
@@ -67,6 +63,60 @@ int checkSET(char* SET) {
     }
   }
   return TRUE;
+}
+
+int checkDisc(char* DISC, int index) {
+
+  for(int i=0; i<index; i++) {
+    if(DISC[0] != (char) FLAG) {
+      return FALSE;
+    }
+    if(DISC[1] != (char) FIELD_A_SC) {
+      return FALSE;
+    }
+    if(DISC[2] != (char) CONTROL_DISC) {
+      return FALSE;
+    }
+    if(DISC[3] != (char) (FIELD_A_RC ^ DISC)) {
+      return FALSE;
+    }
+    if(DISC[4] != (char) FLAG) {
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+int checkUA(char* ua) {
+	
+	for(int i=0; i<5; i++) {
+		if(i == 0){
+			if(ua[i] != (char) FLAG) {
+				return FALSE;
+			}
+		}		
+		else if(i == 1){
+			if(ua[i] != (char) FIELD_A_SC) {
+				return FALSE;
+			}
+		}
+		else if(i == 2) {
+			if(ua[i] != (char) CONTROL_UA) {
+				return FALSE;
+			}
+		}
+		else if(i == 3) {
+			if(ua[i] != (char) (FIELD_A_SC ^ CONTROL_UA)) {
+				return FALSE;
+			}
+		}
+		else if(i == 4) {
+			if(ua[i] != (char) FLAG) {
+				return FALSE;
+			}
+		}
+	}
+	return TRUE;
 }
 
 int checkControlPacket(int size, char* buffer) {
@@ -123,6 +173,60 @@ int readDataPacket(int fd, char* buffer) {
   return TRUE;
 }
 
+int readDiscFrame(int fd, char* buffer) {
+
+  char byte;
+  int index = 0;
+
+  while(read(fd, &byte, 1) > 0) {
+    buffer[index++] = byte;
+  }
+
+  if(checkDisc(buffer, index)) {
+    return 1;
+  }
+
+  return 0;
+}
+
+int writeDiscFrame(int fd) {
+
+  char DISC[5];
+
+  DISC[0] = FLAG; 
+  DISC[1] = FIELD_A_SC;
+  DISC[2] = CONTROL_DISC;
+  DISC[3] = (FIELD_A_RC ^ DISC);
+  DISC[4] = FLAG;
+
+  if(write(fd, DISC, 5) < 0) {
+    return 1;
+  }
+
+  return 0;
+}
+
+int readUa(int fd) {
+
+  char byte;
+  int index = 0;
+  int res;
+  char UA[5];
+  
+  while((res = readUa(fd, &byte, 1)) > 0) {
+    buffer[index++] = byte;
+    if(res == -1) {
+      exit(1);
+    }
+  }
+  
+  if(checkUA(UA)) {
+    return 1;
+  }
+
+  return 0;
+}
+
 int llopen(int fd) {
     
     unsigned char SET[5], UA[5];
@@ -170,10 +274,20 @@ int llopen(int fd) {
 int llread(int fd, char* buffer) {  
   
   readControlPacket(int fd, char* buffer);
+
+  readDataPacket(int fd, char* buffer);
 }
 
-int main(int argc, char** argv)
-{
+int lclose(int fd) {
+
+  readDiscFrame(fd, buffer);
+
+  writeDiscFrame(fd);
+
+  readUa(fd);
+}
+
+int main(int argc, char** argv) {
     int fd,c, res;
     struct termios oldtio,newtio;
     char buf[255];
