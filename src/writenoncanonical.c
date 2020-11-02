@@ -43,6 +43,8 @@
 
 #define MAX_PACKET_SIZE 256
 
+#define FILENAME "pinguim.gif"
+
 volatile int STOP=FALSE;
 int alarmFlag = FALSE;
 int conta = 0;
@@ -51,6 +53,26 @@ int frameNs = 0;
 void atende() { // atende alarme
 	printf("alarme # %d\n", ++conta);
 	alarmFlag=TRUE;
+}
+
+unsigned char *openFile(unsigned char *fileName, off_t *fileSize) {
+
+  int fd = open(fileName, O_RDONLY);
+
+  if (fd == -1) {
+    perror("Error opening file\n");
+    exit(-1);
+  }
+  
+  struct stat metadata;
+  fstat(fd, &metadata);
+
+  *fileSize = metadata.st_size;
+  unsigned char *fileData = malloc((*fileSize) * sizeof(unsigned char));
+
+  read(fd, fileData, *fileSize);
+  
+  return fileData;
 }
 
 int checkUA(char* ua) {
@@ -525,8 +547,10 @@ int main(int argc, char** argv)
       exit(1);
     }
 
-    unsigned char *fileName = "pinguim.gif";
-    off_t fileSize = 3200;
+    unsigned char *fileName = FILENAME;
+    off_t fileSize;
+
+    unsigned char *file = openFile(fileName, &fileSize);
 
     unsigned char *controlPacket = buildControlPacket(CONTROL_PACKET_START, fileSize, fileName);
 
@@ -534,8 +558,6 @@ int main(int argc, char** argv)
       perror("Error sending first control packet\n");
       exit(1);
     }
-
-    unsigned char *file = "abdn1 rfdnwuqowijmsw2198qdubhdvbuwb!_ddueoidb12e/$iwubdiubdeiub";
     
     int numPackets = 0;
     int totalPackets = fileSize / MAX_PACKET_SIZE;
