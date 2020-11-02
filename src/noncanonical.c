@@ -13,7 +13,7 @@
 
 #define FLAG 0x7E
 #define CONTROL_SET 0x03
-#define CONTROL_DISC 0x0b
+#define CONTROL_DISC 0x0B
 #define CONTROL_UA 0x07
 #define FIELD_A_SC 0x03
 #define FIELD_A_RC 0x01
@@ -21,6 +21,13 @@
 #define UA_BCC (FIELD_A_SC ^ CONTROL_UA)
 #define BCC_DISC ()
 
+
+#define CONTROL_0 0x00
+#define CONTROL_1 0x40
+
+#define ESC 0x7D
+#define ESC_FLAG 0x5E
+#define ESC_ESC 0x5D
 
 #define DATA_PACKET 0x01
 #define CONTROL_PACKET_START 0x02
@@ -30,6 +37,11 @@
 
 #define FILE_SIZE_FIELD 0x00
 #define FILE_NAME_FIELD 0x01
+
+#define C_RR_0	0x05
+#define C_RR_1	0x85
+#define C_REJ_0	0x01
+#define C_REJ_1	0x81
 
 #define MAX_PACKET_SIZE 256
 
@@ -83,7 +95,7 @@ int checkDisc(char* DISC, int index) {
     if(DISC[2] != (char) CONTROL_DISC) {
       return FALSE;
     }
-    if(DISC[3] != (char) (FIELD_A_RC ^ DISC)) {
+    if(DISC[3] != (char) (FIELD_A_RC ^ CONTROL_DISC)) {
       return FALSE;
     }
     if(DISC[4] != (char) FLAG) {
@@ -284,7 +296,7 @@ int llread(int fd, char* buffer) {
   readDataPacket(int fd, char* buffer);
 }
 
-int lclose(int fd) {
+int llclose(int fd) {
 
   readDiscFrame(fd, buffer);
 

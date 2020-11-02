@@ -15,12 +15,19 @@
 
 #define FLAG 0x7E
 #define CONTROL_SET 0x03
-#define CONTROL_DISC 0x0b
+#define CONTROL_DISC 0x0B
 #define CONTROL_UA 0x07
 #define FIELD_A_SC 0x03
 #define FIELD_A_RC 0x01
 #define SET_BCC (FIELD_A_SC ^ CONTROL_SET)
 #define UA_BCC (FIELD_A_SC ^ CONTROL_UA)
+
+#define CONTROL_0 0x00
+#define CONTROL_1 0x40
+
+#define ESC 0x7D
+#define ESC_FLAG 0x5E
+#define ESC_ESC 0x5D
 
 #define DATA_PACKET 0x01
 #define CONTROL_PACKET_START 0x02
@@ -29,11 +36,17 @@
 #define FILE_SIZE_FIELD 0x00
 #define FILE_NAME_FIELD 0x01
 
+#define C_RR_0	0x05
+#define C_RR_1	0x85
+#define C_REJ_0	0x01
+#define C_REJ_1	0x81
+
 #define MAX_PACKET_SIZE 256
 
 volatile int STOP=FALSE;
 int alarmFlag = FALSE;
 int conta = 0;
+int frameNs = 0;
 
 void atende() { // atende alarme
 	printf("alarme # %d\n", ++conta);
@@ -93,33 +106,45 @@ int llopen(int fd) {
 
   while(tries > 0 && !correctUA) {
 
-      printf("Writing SET...\n");
-      res = write(fd, SET, sizeof(SET));
+    printf("Writing SET...\n");
+    res = write(fd, SET, sizeof(SET));
 
-      printf("Message sent:\n");
-      printf("SET: ");
-      for (int i = 0; i < 5; i++) {
-        printf("%4X ", SET[i]);
-      }
-      printf("\n");
+    printf("Message sent:\n");
+    printf("SET: ");
+    for (int i = 0; i < 5; i++) {
+      printf("%4X ", SET[i]);
+    }
+    printf("\n");
 
-      alarm(3);
+    alarm(3);
 
-      time = alarm(3);
+    time = alarm(3);
       
-      printf("Receiving UA...\n");
-      while (index < 5) {
-        res = read(fd,buf,1);
-        if (res == -1) {
-          break;
-        }
-        buf[res] = 0;
-        readTotalBytes += res;
-        message[index++] = buf[0];
-      }
-
+    printf("Receiving UA...\n");
+    while (index < 5) {
+      res = read(fd,buf,1);
       if (res == -1) {
-        printf("UA was not read!\n");
+        break;
+      }
+      buf[res] = 0;
+      readTotalBytes += res;
+      message[index++] = buf[0];
+    }
+
+    if (res == -1) {
+      printf("UA was not read!\n");
+      while (time = alarm(time)) {
+        sleep(1);
+      }
+      alarmFlag = FALSE;
+      tries--;
+      continue;
+    }
+
+    if (readTotalBytes == 5) { //UA foi lido
+      correctUA = checkUA(message);
+      if (correctUA == FALSE) {
+        printf("Error reading UA message!\n");
         while (time = alarm(time)) {
           sleep(1);
         }
@@ -127,27 +152,20 @@ int llopen(int fd) {
         tries--;
         continue;
       }
-
-      if (readTotalBytes == 5) { //UA foi lido
-        correctUA = checkUA(message);
-        if (correctUA == FALSE) {
-          printf("Error reading UA message!\n");
-          while (time = alarm(time)) {
-            sleep(1);
-          }
-          alarmFlag = FALSE;
-          tries--;
-          continue;
+      else {
+        printf("Message received:\n");
+        printf("UA: ");
+        for (int i = 0; i < 5; i++) {
+          printf("%4X ", message[i]);
         }
-        else {
-          printf("Message received:\n");
-          printf("UA: ");
-          for (int i = 0; i < 5; i++) {
-            printf("%4X ", message[i]);
-          }
-          printf("\n");
-        }
+        printf("\n");
       }
+    }
+  }
+
+  if(tries == 0){
+    printf("Error: Reached maximum number of tries\n");
+    return -1;
   }
 
   return 0;
@@ -213,16 +231,233 @@ unsigned char *buildDataPacket(unsigned char *data, int *dataPacketNum) {
   return packet;
 }
 
+unsigned char getResponse(int fd){
+  int position = 0;
+  unsigned char c;
+  unsigned char control;
+
+  while (!alarmFlag && position != 5) {
+    read(fd, &c, 1);
+    switch (position) {
+      case 0:
+        if (c == FLAG)
+          position = 1;
+        break;
+      case 1:
+        if (c == FIELD_A_SC)
+          position = 2;
+        else if (c == FLAG)
+          position = 1;
+        else
+          position = 0;
+        break;
+      case 2:
+        if (c == C_RR_0 || c == C_RR_1 || c == C_REJ_0 || c == C_REJ_1 || c == CONTROL_DISC) {
+          control = c;
+          position = 3;
+        }
+        else if (c == FLAG)
+          position = 1;
+        else
+          position = 0;
+        break;
+      case 3:
+        if (c == FIELD_A_SC ^ control)
+          position = 4;
+        else
+          position = 0;
+        break;
+      case 4:
+        if (c == FLAG) {
+          position = 5;
+          return control;
+        }
+        else
+          position = 0;
+        break;
+    }
+  }
+
+  return 0x00;
+}
+
 int llwrite(int fd, char* buffer, int length) {
-
-  /*int index = 0, res;
-
-  unsigned char message[255];
-
   
+  int frameLength = length + 6;
+  unsigned char *frame = malloc(frameLength * sizeof(unsigned char));
 
-  printf("Writing SET...\n");
-  res = write(fd, message, sizeof(message));*/
+  int index = 0;
+
+  frame[index++] = FLAG;          //F
+  frame[index++] = FIELD_A_SC;    //A
+
+  //C
+  if (frameNs == 0) {
+    frame[index++] = CONTROL_0;
+    frameNs = 1;
+  }
+  else {
+    frame[index++] = CONTROL_1;
+    frameNs = 0;
+  }
+
+  frame[index++] = frame[1] ^ frame[2];   //BCC1
+
+  //Data (buffer) byte stuffing
+  for (int i=0; i < length; i++) {
+    if (buffer[i] == FLAG) {
+      frame = realloc(frame, ++frameLength * sizeof(unsigned char));    //add a char to the original size
+      frame[index++] = ESC;
+      frame[index++] = ESC_FLAG;
+    }
+    else if (buffer[i] == ESC) {
+      frame = realloc(frame, ++frameLength * sizeof(unsigned char));    //add a char to the original size
+      frame[index++] = ESC;
+      frame[index++] = ESC_ESC;
+    }
+    else {
+      frame[index++] = buffer[i];
+    }
+  }
+
+  unsigned char BCC2 = buffer[0];
+
+  //BCC2 calculation
+  for (int i=1; i < length; i++) {
+    BCC2 ^= buffer[i];
+  }
+
+  //BCC2 byte stuffing
+  if (BCC2 == FLAG) {
+    frame = realloc(frame, ++frameLength * sizeof(unsigned char));    //add a char to the original size
+    frame[index++] = ESC;
+    frame[index++] = ESC_FLAG;
+  }
+  else if (BCC2 == ESC) {
+    frame = realloc(frame, ++frameLength * sizeof(unsigned char));    //add a char to the original size
+    frame[index++] = ESC;
+    frame[index++] = ESC_ESC;
+  }
+  else {
+    frame[index++] = BCC2;
+  }
+
+  frame[index++] = FLAG;    //F
+
+
+  /* --- Send frame --- */
+
+  int sent = FALSE;
+  int tries = 3;
+  int res;
+
+  while(tries > 0 && !sent) {
+    alarmFlag = FALSE;
+    alarm(3);
+
+    res = write(fd, frame, index);
+
+    unsigned char response = getResponse(fd);
+
+    if(response == C_REJ_0 || response == C_REJ_1)   //rejected, resend frame
+      tries--;
+    else               //accepted
+      sent = TRUE;
+
+    alarm(0);   //reset alarm
+    conta = 0;
+  }
+
+  if(tries == 0){
+    printf("Error: Reached maximum number of tries\n");
+    return -1;
+  }
+
+  return index;
+}
+
+int llclose(int fd) {
+
+  int tries = 3;
+  char message[255];
+  int index = 0, res;
+  int correctUA = FALSE;
+  int readTotalBytes;
+
+  unsigned char buf[5];
+  unsigned char DISC[5];
+
+  DISC[0] = FLAG;
+  DISC[1] = FIELD_A_SC;
+  DISC[2] = CONTROL_DISC;
+  DISC[3] = DISC[1] ^ DISC[2];
+  DISC[4] = FLAG;
+
+  int time;
+
+  while(tries > 0 && !correctUA) {
+
+    printf("Writing DISC...\n");
+    res = write(fd, DISC, sizeof(DISC));
+
+    printf("Message sent:\n");
+    printf("DISC: ");
+    for (int i = 0; i < 5; i++) {
+      printf("%4X ", DISC[i]);
+    }
+    printf("\n");
+
+    time = alarm(3);
+      
+    printf("Receiving UA...\n");
+    while (index < 5) {
+      res = read(fd,buf,1);
+      if (res == -1) {
+        break;
+      }
+      buf[res] = 0;
+      readTotalBytes += res;
+      message[index++] = buf[0];
+    }
+
+    if (res == -1) {
+      printf("UA was not read!\n");
+      while (time = alarm(time)) {
+        sleep(1);
+      }
+      alarmFlag = FALSE;
+      tries--;
+      continue;
+    }
+
+    if (readTotalBytes == 5) { //UA foi lido
+      correctUA = checkUA(message);
+      if (correctUA == FALSE) {
+        printf("Error reading UA message!\n");
+        while (time = alarm(time)) {
+          sleep(1);
+        }
+        alarmFlag = FALSE;
+        tries--;
+        continue;
+      }
+      else {
+        printf("Message received:\n");
+        printf("UA: ");
+        for (int i = 0; i < 5; i++) {
+          printf("%4X ", message[i]);
+        }
+        printf("\n");
+        alarm(0);
+        conta = 0;
+      }
+    }
+  }
+
+  if(tries == 0){
+    printf("Error: Reached maximum number of tries\n");
+    return -1;
+  }
 
   return 0;
 }
@@ -285,13 +520,20 @@ int main(int argc, char** argv)
 
     (void) signal(SIGALRM, atende); //criar handler para sigalarm
 
-    llopen(fd);
+    if(llopen(fd) == -1) {
+      perror("Error establishing connection\n");
+      exit(1);
+    }
 
     unsigned char *fileName = "pinguim.gif";
     off_t fileSize = 3200;
 
     unsigned char *controlPacket = buildControlPacket(CONTROL_PACKET_START, fileSize, fileName);
-    //llwrite(fd, controlPacket, strlen(controlPacket));
+
+    if(llwrite(fd, controlPacket, strlen(controlPacket)) == -1) {
+      perror("Error sending first control packet\n");
+      exit(1);
+    }
 
     unsigned char *file = "abdn1 rfdnwuqowijmsw2198qdubhdvbuwb!_ddueoidb12e/$iwubdiubdeiub";
     
@@ -304,18 +546,27 @@ int main(int argc, char** argv)
     
     //send message packets
     while(numPackets < totalPackets) {
-
       unsigned char *data = splitFileData(file, fileSize, numPackets);
     
       unsigned char *dataPacket = buildDataPacket(data, &numPackets);
 
-      //llwrite(fd, dataPacket, strlen(dataPacket));
+      if(llwrite(fd, dataPacket, strlen(dataPacket)) == -1) {
+        perror("Error sending data packet\n");
+        exit(1);
+      }
     }
 
     controlPacket = buildControlPacket(CONTROL_PACKET_END, fileSize, fileName);
-    //llwrite(fd, controlPacket, strlen(controlPacket));
+    
+    if(llwrite(fd, controlPacket, strlen(controlPacket)) == -1) {
+      perror("Error sending final control packet\n");
+      exit(1);
+    }
 
-    //llclose(fd);
+    if(llclose(fd) == -1) {
+      perror("Error closing connection\n");
+      exit(1);
+    }
  
 
   /* 
