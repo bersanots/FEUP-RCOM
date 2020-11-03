@@ -239,7 +239,7 @@ unsigned char *buildDataPacket(unsigned char *data, int *dataPacketNum, int *pac
   packet[3] = (int)dataLength % 256;      //L1
 
   //P
-  memcpy(&packet[4], &data, dataLength);
+  memcpy(&packet[4], data, dataLength);
 
   return packet;
 }
@@ -584,7 +584,7 @@ int main(int argc, char** argv)
         exit(1);
       }
 
-      printf("Sent data packet number %d\n", numPackets);
+      printf("Sent data packet number %d\n", numPackets - 1);
     }
 
     printf("Data packets sent\n\n");

@@ -164,7 +164,7 @@ int readControlPacket(unsigned char control, char* buffer, off_t *fileSize, unsi
   fileName = realloc(fileName, *fileNameLength + 1);
 
   //V2
-  for (int i = 0; i < fileNameLength; i++) {
+  for (int i = 0; i < *fileNameLength; i++) {
     fileName[i] = buffer[index++];
   }
 
@@ -293,6 +293,8 @@ int llread(int fd, char* buffer) {
   int send = FALSE;
   unsigned char c;
   unsigned char control;
+
+  buffer = malloc(0);
 
   while (position != 6) {
     read(fd, &c, 1);
@@ -494,7 +496,7 @@ int main(int argc, char** argv) {
     off_t fileSize = 0;
     int fileNameLength = 0;
 
-    readControlPacket(CONTROL_PACKET_START, controlPacket, fileSize, fileName, &fileNameLength);
+    readControlPacket(CONTROL_PACKET_START, controlPacket, &fileSize, fileName, &fileNameLength);
 
     printf("First control packet read\n\n");
 
