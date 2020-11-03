@@ -193,11 +193,12 @@ int llopen(int fd) {
   return 0;
 }
 
-unsigned char *buildControlPacket(unsigned char control, off_t fileSize, unsigned char *fileName) {
+unsigned char *buildControlPacket(unsigned char control, off_t fileSize, unsigned char *fileName, int *packetSize) {
   
   int fileSizeLength = sizeof(fileSize);
   int fileNameLength = strlen(fileName);
-  unsigned char *packet = malloc((5 + fileSizeLength + fileNameLength) * sizeof(unsigned char));
+  *packetSize = 5 + fileSizeLength + fileNameLength;
+  unsigned char *packet = malloc(*packetSize * sizeof(unsigned char));
 
   int index = 0;
 
@@ -222,25 +223,26 @@ unsigned char *buildControlPacket(unsigned char control, off_t fileSize, unsigne
   return packet;
 }
 
-unsigned char *splitFileData(unsigned char *data, off_t fileSize, int dataPacketNum) {
+unsigned char *splitFileData(unsigned char *data, off_t fileSize, int dataPacketNum, int *packetSize) {
 
-  int packetSize = MAX_PACKET_SIZE;
+  *packetSize = MAX_PACKET_SIZE;
 
   if (dataPacketNum * MAX_PACKET_SIZE > fileSize) {
-    packetSize = dataPacketNum * MAX_PACKET_SIZE - fileSize;
+    *packetSize = dataPacketNum * MAX_PACKET_SIZE - fileSize;
   }
 
-  unsigned char *packet = malloc(packetSize);
+  unsigned char *packet = malloc(*packetSize);
 
-  memcpy(packet, &data[dataPacketNum * MAX_PACKET_SIZE], packetSize);
+  memcpy(packet, &data[dataPacketNum * MAX_PACKET_SIZE], *packetSize);
 
   return packet;
 }
 
-unsigned char *buildDataPacket(unsigned char *data, int *dataPacketNum) {
+unsigned char *buildDataPacket(unsigned char *data, int *dataPacketNum, int *packetSize) {
 
-  int dataLength = strlen(data);
-  unsigned char *packet = malloc((4 + dataLength) * sizeof(unsigned char));
+  int dataLength = *packetSize;
+  *packetSize = 4 + dataLength;
+  unsigned char *packet = malloc(*packetSize * sizeof(unsigned char));
 
   packet[0] = DATA_PACKET;                //C
   packet[1] = (*dataPacketNum)++ % 255;   //N
@@ -542,24 +544,36 @@ int main(int argc, char** argv)
 
     (void) signal(SIGALRM, atende); //criar handler para sigalarm
 
+    printf("Establishing connection...\n");
+
     if(llopen(fd) == -1) {
       perror("Error establishing connection\n");
       exit(1);
     }
 
+    printf("Connection successfully established\n");
+
     unsigned char *fileName = FILENAME;
     off_t fileSize;
 
+    printf("Opening file...\n");
+
     unsigned char *file = openFile(fileName, &fileSize);
 
-    unsigned char *controlPacket = buildControlPacket(CONTROL_PACKET_START, fileSize, fileName);
+    printf("File successfully read\n");
 
-    if(llwrite(fd, controlPacket, strlen(controlPacket)) == -1) {
+    int packetSize = 0;
+
+    unsigned char *controlPacket = buildControlPacket(CONTROL_PACKET_START, fileSize, fileName, &packetSize);
+
+    if(llwrite(fd, controlPacket, packetSize) == -1) {
       perror("Error sending first control packet\n");
       exit(1);
     }
+
+    printf("First control packet sent\n");
     
-    int numPackets = 0;
+    int numPackets = 1;
     int totalPackets = fileSize / MAX_PACKET_SIZE;
 
     if(fileSize % MAX_PACKET_SIZE != 0) {
@@ -567,28 +581,36 @@ int main(int argc, char** argv)
     }
     
     //send message packets
-    while(numPackets < totalPackets) {
-      unsigned char *data = splitFileData(file, fileSize, numPackets);
-    
-      unsigned char *dataPacket = buildDataPacket(data, &numPackets);
+    while(numPackets <= totalPackets) {
+      unsigned char *data = splitFileData(file, fileSize, numPackets, &packetSize);
 
-      if(llwrite(fd, dataPacket, strlen(dataPacket)) == -1) {
+      unsigned char *dataPacket = buildDataPacket(data, &numPackets, &packetSize);
+
+      if(llwrite(fd, dataPacket, packetSize) == -1) {
         perror("Error sending data packet\n");
         exit(1);
       }
+
+      printf("Sent data packet number %d\n", numPackets);
     }
 
-    controlPacket = buildControlPacket(CONTROL_PACKET_END, fileSize, fileName);
+    controlPacket = buildControlPacket(CONTROL_PACKET_END, fileSize, fileName, &packetSize);
     
-    if(llwrite(fd, controlPacket, strlen(controlPacket)) == -1) {
+    if(llwrite(fd, controlPacket, packetSize) == -1) {
       perror("Error sending final control packet\n");
       exit(1);
     }
+
+    printf("Final control packet sent\n");
+
+    printf("Disconnecting...\n");
 
     if(llclose(fd) == -1) {
       perror("Error closing connection\n");
       exit(1);
     }
+
+    printf("Connection successfully closed\n");
  
 
   /* 
