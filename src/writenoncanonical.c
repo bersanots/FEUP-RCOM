@@ -217,7 +217,7 @@ unsigned char *splitFileData(unsigned char *data, off_t fileSize, int dataPacket
   *packetSize = MAX_PACKET_SIZE;
 
   if (dataPacketNum * MAX_PACKET_SIZE > fileSize) {
-    *packetSize = dataPacketNum * MAX_PACKET_SIZE - fileSize;
+    *packetSize = fileSize - (dataPacketNum - 1) * MAX_PACKET_SIZE;
   }
 
   unsigned char *packet = malloc(*packetSize);
@@ -522,7 +522,7 @@ int main(int argc, char** argv)
 
     (void) signal(SIGALRM, atende); //criar handler para sigalarm
 
-    printf("Establishing connection...\n");
+    printf("[Establishing connection...]\n");
 
     if(llopen(fd) == -1) {
       perror("Error establishing connection\n");
@@ -534,17 +534,19 @@ int main(int argc, char** argv)
     unsigned char *fileName = FILENAME;
     off_t fileSize;
 
-    printf("Opening file... ");
+    printf("[Opening file...]\n");
 
     unsigned char *file = openFile(fileName, &fileSize);
 
-    printf("File successfully read\n\n");
+    printf("File successfully read\n");
+    
+    printf("File name: %s     File size: %i bytes\n\n", fileName, fileSize);
 
     int packetSize = 0;
 
     unsigned char *controlPacket = buildControlPacket(CONTROL_PACKET_START, fileSize, fileName, &packetSize);
 
-    printf("Sending first control packet... ");
+    printf("[Sending first control packet...]\n");
 
     if(llwrite(fd, controlPacket, packetSize) == -1) {
       perror("Error sending first control packet\n");
@@ -560,7 +562,7 @@ int main(int argc, char** argv)
       totalPackets++;
     }
 
-    printf("Sending data packets...\n");
+    printf("[Sending data packets...]\n");
     
     //send message packets
     while(numPackets <= totalPackets) {
@@ -573,14 +575,14 @@ int main(int argc, char** argv)
         exit(1);
       }
 
-      printf("Sent data packet number %d\n", numPackets - 1);
+      printf("Sent data packet number %d with %d bytes\n", numPackets - 1, packetSize - 4);
     }
 
     printf("Data packets sent\n\n");
 
     controlPacket = buildControlPacket(CONTROL_PACKET_END, fileSize, fileName, &packetSize);
 
-    printf("Sending final control packet... ");
+    printf("[Sending final control packet...]\n");
     
     if(llwrite(fd, controlPacket, packetSize) == -1) {
       perror("Error sending final control packet\n");
@@ -589,7 +591,7 @@ int main(int argc, char** argv)
 
     printf("Final control packet sent\n\n");
 
-    printf("Disconnecting...\n");
+    printf("[Disconnecting...]\n");
 
     if(llclose(fd) == -1) {
       perror("Error closing connection\n");

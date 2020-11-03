@@ -49,8 +49,6 @@ volatile int STOP=FALSE;
 int success;
 int frameNs = 0;
 
-enum DataFrameState { FLAG_RCV, A_RCV, C_RCV, BCC1_RCV, D_RCV };
-
 
 int checkSET(char* SET) {
 
@@ -419,7 +417,7 @@ int main(int argc, char** argv) {
 
     printf("New termios structure set\n\n");
 
-    printf("Establishing connection...\n");
+    printf("[Establishing connection...]\n");
     
     if(llopen(fd) == -1) {
       perror("Error establishing connection\n");
@@ -428,7 +426,7 @@ int main(int argc, char** argv) {
 
     printf("Connection successfully established\n\n");
 
-    printf("Reading first control packet... ");
+    printf("[Reading first control packet...]\n");
 
     int controlPacketSize;
     unsigned char *controlPacket = llread(fd, &controlPacketSize);
@@ -448,10 +446,11 @@ int main(int argc, char** argv) {
 
     int numPackets = 0;
     int packetSize;
+    int totalSize = 0;
 
     int file_fd = open(fileName, O_RDWR | O_CREAT , 777);
 
-    printf("Reading data packets...\n");
+    printf("[Reading data packets...]\n");
 
     while(1) {
       unsigned char *packet = llread(fd, &packetSize);
@@ -463,22 +462,24 @@ int main(int argc, char** argv) {
       else if (packetSize == 0) continue;
 
       if(packet[0] == DATA_PACKET) {
-        write(file_fd, &packet[4], 256 * packet[2] + packet[3]);
+        int dataSize = 256 * packet[2] + packet[3];
+        write(file_fd, &packet[4], dataSize);
+        printf("Read data packet number %d with %d bytes\n", ++numPackets, dataSize);
+        totalSize += dataSize;
       }
       else if(packet[0] == CONTROL_PACKET_END) {
         break;
       }
-
-      printf("Read data packet number %d\n", ++numPackets);
     }
 
-    printf("All data packets read\n\n");
+    printf("All data packets read\n");
+    printf("Total size: %d bytes\n\n", totalSize);
 
     printf("Final control packet read\n\n");
 
     close(file_fd);
 
-    printf("Disconnecting...\n");
+    printf("[Disconnecting...]\n");
 
     if(llclose(fd) == -1) {
       perror("Error closing connection\n");
