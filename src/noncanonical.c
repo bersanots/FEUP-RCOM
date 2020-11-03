@@ -173,60 +173,6 @@ int readControlPacket(unsigned char control, char* buffer, off_t *fileSize, unsi
   return 0;
 }
 
-/*int readDiscFrame(int fd, char* buffer) {
-
-  char byte;
-  int index = 0;
-
-  while(read(fd, &byte, 1) > 0) {
-    buffer[index++] = byte;
-  }
-
-  if(checkDisc(buffer, index)) {
-    return 1;
-  }
-
-  return 0;
-}
-
-int writeDiscFrame(int fd) {
-
-  char DISC[5];
-
-  DISC[0] = FLAG; 
-  DISC[1] = FIELD_A_SC;
-  DISC[2] = CONTROL_DISC;
-  DISC[3] = (FIELD_A_RC ^ DISC);
-  DISC[4] = FLAG;
-
-  if(write(fd, DISC, 5) < 0) {
-    return 1;
-  }
-
-  return 0;
-}
-
-int readUa(int fd) {
-
-  char byte;
-  int index = 0;
-  int res;
-  char UA[5];
-  
-  while((res = readUa(fd, &byte, 1)) > 0) {
-    buffer[index++] = byte;
-    if(res == -1) {
-      exit(1);
-    }
-  }
-  
-  if(checkUA(UA)) {
-    return 1;
-  }
-
-  return 0;
-}*/
-
 int sendResponse(int fd, unsigned char control) {
   unsigned char response[5];
 
