@@ -47,6 +47,7 @@
 
 volatile int STOP=FALSE;
 int success;
+int frameNs = 0;
 
 enum DataFrameState { FLAG_RCV, A_RCV, C_RCV, BCC1_RCV, D_RCV };
 
@@ -83,9 +84,9 @@ int checkSET(char* SET) {
   return TRUE;
 }
 
-int checkDisc(char* DISC, int index) {
+int checkDisc(char* DISC) {
 
-  for(int i=0; i<index; i++) {
+  for(int i=0; i<5; i++) {
     if(DISC[0] != (char) FLAG) {
       return FALSE;
     }
@@ -137,61 +138,47 @@ int checkUA(char* ua) {
 	return TRUE;
 }
 
-int checkControlPacket(int size, char* buffer) {
-  
-  for(int i=0; i<size; i++) {
-    if(buffer[1] != (char) CONTROL_PACKET_START) {
-      return FALSE;
-    }
-  }
-  return TRUE;
-}
+int readControlPacket(unsigned char control, char* buffer, off_t *fileSize, unsigned char *fileName, int *fileNameLength) {
 
-int checkDataPacket(int size, char* buffer) {
-
-  for(int i=0; i<size; i++) {
-    if(buffer[index] != (char) DATA_PACKET_START) {
-      return FALSE;
-    }
-  }
-
-  return TRUE;
-
-}
-
-int readControlPacket(int fd, char* buffer) {
-
-  char byte;
   int index = 0;
+  *fileSize = 0;
 
-  while(read(fd, &byte, 1) > 0) {
-    buffer[index++] = byte;
+  if(buffer[index++] != control)              //C
+    return -1;
+
+  if(buffer[index++] != FILE_SIZE_FIELD)      //T1
+    return -1;
+
+  int fileSizeLength = buffer[index++];       //L1
+
+  //V1
+  for (int i = fileSizeLength - 1; i >= 0; i--) {
+    *fileSize |= (buffer[index++] << (8 * i));
   }
 
-  if(checkControlPacket(index, buffer)) {
-    return FALSE;
-  } 
+  if(buffer[index++] != FILE_NAME_FIELD)       //T2
+    return -1;
 
-  return TRUE; 
+  *fileNameLength = buffer[index++];           //L2
+
+  fileName = realloc(fileName, *fileNameLength + 1);
+
+  //V2
+  for (int i = 0; i < fileNameLength; i++) {
+    fileName[i] = buffer[index++];
+  }
+
+  fileName[*fileNameLength] = '\0';
+
+  return 0;
 }
 
-int readDataPacket(int fd, char* buffer) {
+int readDataPacket(char* buffer) {
 
-  char byte;
-  int index;
-
-  while(read(fd, &byte, 1) > 0) {
-    buffer[index++] = byte;
-  }
-
-  if(checkDataPacket(index, buffer)) {
-    return FALSE;
-  }
-
-  return TRUE;
+  
 }
 
-int readDiscFrame(int fd, char* buffer) {
+/*int readDiscFrame(int fd, char* buffer) {
 
   char byte;
   int index = 0;
@@ -243,6 +230,22 @@ int readUa(int fd) {
   }
 
   return 0;
+}*/
+
+int sendResponse(int fd, unsigned char control) {
+  unsigned char response[5];
+
+  response[0] = FLAG;
+  response[1] = FIELD_A_SC;
+  response[2] = control;
+  response[3] = response[1] ^ response[2];
+  response[4] = FLAG;
+  
+  if(write(fd, response, 5) < 0) {
+    return 1;
+  }
+
+  return 0;
 }
 
 int llopen(int fd) {
@@ -258,17 +261,12 @@ int llopen(int fd) {
       SET[index++] = buf[0]; 
     }
 
-    printf("Message Received:\n");
-    printf("SET: ");
-    for (int i = 0; i < 5; i++) {
-      printf("%4X", SET[i]);
-    }
-    printf("\n"); 
-
     if(checkSET(SET) == FALSE) {
       printf("Error receiving SET message!\n");
       exit(1);
     }
+
+    printf("SET received\n");
     
     UA[0] = FLAG;
     UA[1] = FIELD_A_SC;
@@ -276,46 +274,142 @@ int llopen(int fd) {
     UA[3] = UA[1] ^ UA[2];
     UA[4] = FLAG;
     
-    printf("Writing UA...\n");
+    printf("Writing UA... ");
     write(fd, UA, sizeof(UA));
-
-    printf("Message sent:\n");
-	  printf("UA: ");
-    for (int i = 0; i < 5; i++){
-       printf("%4X ", UA[i]);
-    }
-    printf("\n");
+    printf("UA sent\n");
 
     return 0; 
 }
 
-int llread(int fd, char* buffer) {  
-  
-  readControlPacket(int fd, char* buffer);
+int checkBCC2(unsigned char *buf, int bufSize) {
+  unsigned char BCC2 = buf[0];
 
-  readDataPacket(int fd, char* buffer);
+  for (int i = 1; i < bufSize - 1; i++)
+    BCC2 ^= buf[i];
+
+  return BCC2 == buf[bufSize - 1];
 }
 
-int llclose(int fd) {
+int llread(int fd, char* buffer) {
+
+  int packetSize = 0;
+  int position = 0;
+  int frameNum = 0;
+  int send = FALSE;
+  unsigned char c;
+  unsigned char control;
+
+  while (position != 6) {
+    read(fd, &c, 1);
+    switch (position) {
+      case 0:
+        if (c == FLAG)
+          position = 1;
+        break;
+      case 1:
+        if (c == FIELD_A_SC)
+          position = 2;
+        else if (c == FLAG)
+          position = 1;
+        else
+          position = 0;
+        break;
+      case 2:
+        if (c == CONTROL_0) {
+          frameNum = 0;
+          control = c;
+          position = 3;
+        }
+        else if (c == CONTROL_1) {
+          frameNum = 1;
+          control = c;
+          position = 3;
+        }
+        else if (c == FLAG)
+          position = 1;
+        else
+          position = 0;
+        break;
+      case 3:
+        if (c == FIELD_A_SC ^ control)
+          position = 4;
+        else
+          position = 0;
+        break;
+      case 4:
+        if (c == FLAG) {
+          if (checkBCC2(buffer, packetSize)) {
+            if (frameNum == 0)
+              sendResponse(fd, C_RR_1);
+            else
+              sendResponse(fd, C_RR_0);
+            position = 6;
+            send = TRUE;
+          }
+          else {
+            if (frameNum == 0)
+              sendResponse(fd, C_REJ_1);
+            else
+              sendResponse(fd, C_REJ_0);
+            position = 6;
+            send = FALSE;
+          }
+        }
+        else if (c == ESC)
+          position = 5;
+        else {
+          buffer = realloc(buffer, ++packetSize);
+          buffer[packetSize - 1] = c;
+        }
+        break;
+      case 5:
+        if (c == ESC_FLAG) {
+          buffer = realloc(buffer, ++packetSize);
+          buffer[packetSize - 1] = FLAG;
+        }
+        else if (c == ESC_ESC) {
+          buffer = realloc(buffer, ++packetSize);
+          buffer[packetSize - 1] = ESC;
+        }
+        else {
+          perror("Invalid character after escape");
+          exit(-1);
+        }
+        position = 4;
+        break;
+    }
+  }
+
+  buffer = realloc(buffer, --packetSize);   //remove BCC2
+
+  if (send && frameNum == frameNs)
+    frameNs ^= 1;
+  else
+    packetSize = 0;
+
+  return packetSize;
+}
+
+/*int llclose(int fd) {
 
   readDiscFrame(fd, buffer);
 
   writeDiscFrame(fd);
 
   readUa(fd);
-}
+}*/
 
 int main(int argc, char** argv) {
     int fd,c, res;
     struct termios oldtio,newtio;
     char buf[255];
 
-    if ( (argc < 2) || 
+    /*if ( (argc < 2) || 
   	     ((strcmp("/dev/ttyS0", argv[1])!=0) && 
   	      (strcmp("/dev/ttyS1", argv[1])!=0) )) {
       printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
       exit(1);
-    }
+    }*/
 
   /*
     Open serial port device for reading and writing and not as controlling tty
@@ -355,10 +449,74 @@ int main(int argc, char** argv) {
     }
 
     printf("New termios structure set\n");
+
+    printf("Establishing connection...\n");
     
+    if(llopen(fd) == -1) {
+      perror("Error establishing connection\n");
+      exit(1);
+    }
 
-    llopen(fd);
+    printf("Connection successfully established\n\n");
 
+    unsigned char *controlPacket = malloc(0);
+
+    printf("Reading first control packet... ");
+
+    int controlPacketSize = llread(fd, controlPacket);
+
+    if(controlPacketSize == -1) {
+      perror("Error reading first control packet\n");
+      exit(1);
+    }
+
+    unsigned char *fileName = malloc(0);
+    off_t fileSize = 0;
+    int fileNameLength = 0;
+
+    readControlPacket(CONTROL_PACKET_START, controlPacket, fileSize, fileName, &fileNameLength);
+
+    printf("First control packet read\n\n");
+
+    int numPackets = 0;
+    unsigned char *dataPacket = malloc(0);
+
+    printf("Reading data packets...\n");
+
+    while(1) {
+      if(llread(fd, dataPacket) == -1) {
+        perror("Error reading data packet\n");
+        exit(1);
+      }
+
+      readDataPacket(dataPacket);
+
+      printf("Read data packet number %d\n", ++numPackets);
+    }
+
+    printf("All data packets read\n\n");
+
+    printf("Reading final control packet... ");
+
+    controlPacketSize = llread(fd, controlPacket);
+
+    if(controlPacketSize == -1) {
+      perror("Error reading final control packet\n");
+      exit(1);
+    }
+
+    readControlPacket(CONTROL_PACKET_END, controlPacket, fileSize, fileName, &fileNameLength);
+
+    printf("Final control packet read\n\n");
+
+    printf("Disconnecting... ");
+
+    if(llclose(fd) == -1) {
+      perror("Error closing connection\n");
+      exit(1);
+    }
+
+    printf("Connection successfully closed\n");
   
 
   /* 

@@ -128,21 +128,15 @@ int llopen(int fd) {
 
   while(tries > 0 && !correctUA) {
 
-    printf("Writing SET...\n");
+    printf("Writing SET... ");
     res = write(fd, SET, sizeof(SET));
-
-    printf("Message sent:\n");
-    printf("SET: ");
-    for (int i = 0; i < 5; i++) {
-      printf("%4X ", SET[i]);
-    }
-    printf("\n");
+    printf("SET sent\n");
 
     alarm(3);
 
     time = alarm(3);
       
-    printf("Receiving UA...\n");
+    printf("Receiving UA... ");
     while (index < 5) {
       res = read(fd,buf,1);
       if (res == -1) {
@@ -175,12 +169,7 @@ int llopen(int fd) {
         continue;
       }
       else {
-        printf("Message received:\n");
-        printf("UA: ");
-        for (int i = 0; i < 5; i++) {
-          printf("%4X ", message[i]);
-        }
-        printf("\n");
+        printf("UA received\n");
       }
     }
   }
@@ -493,12 +482,12 @@ int main(int argc, char** argv)
     char buf[255];
     int i, sum = 0, speed = 0;
     
-    if ( (argc < 2) || 
+    /*if ( (argc < 2) || 
   	     ((strcmp("/dev/ttyS0", argv[1])!=0) && 
   	      (strcmp("/dev/ttyS1", argv[1])!=0) )) {
       printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
       exit(1);
-    }
+    }*/
 
 
   /*
@@ -551,27 +540,29 @@ int main(int argc, char** argv)
       exit(1);
     }
 
-    printf("Connection successfully established\n");
+    printf("Connection successfully established\n\n");
 
     unsigned char *fileName = FILENAME;
     off_t fileSize;
 
-    printf("Opening file...\n");
+    printf("Opening file... ");
 
     unsigned char *file = openFile(fileName, &fileSize);
 
-    printf("File successfully read\n");
+    printf("File successfully read\n\n");
 
     int packetSize = 0;
 
     unsigned char *controlPacket = buildControlPacket(CONTROL_PACKET_START, fileSize, fileName, &packetSize);
+
+    printf("Sending first control packet... ");
 
     if(llwrite(fd, controlPacket, packetSize) == -1) {
       perror("Error sending first control packet\n");
       exit(1);
     }
 
-    printf("First control packet sent\n");
+    printf("First control packet sent\n\n");
     
     int numPackets = 1;
     int totalPackets = fileSize / MAX_PACKET_SIZE;
@@ -579,6 +570,8 @@ int main(int argc, char** argv)
     if(fileSize % MAX_PACKET_SIZE != 0) {
       totalPackets++;
     }
+
+    printf("Sending data packets...\n");
     
     //send message packets
     while(numPackets <= totalPackets) {
@@ -594,7 +587,11 @@ int main(int argc, char** argv)
       printf("Sent data packet number %d\n", numPackets);
     }
 
+    printf("Data packets sent\n\n");
+
     controlPacket = buildControlPacket(CONTROL_PACKET_END, fileSize, fileName, &packetSize);
+
+    printf("Sending final control packet... ");
     
     if(llwrite(fd, controlPacket, packetSize) == -1) {
       perror("Error sending final control packet\n");
@@ -603,7 +600,7 @@ int main(int argc, char** argv)
 
     printf("Final control packet sent\n");
 
-    printf("Disconnecting...\n");
+    printf("Disconnecting...");
 
     if(llclose(fd) == -1) {
       perror("Error closing connection\n");
