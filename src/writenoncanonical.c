@@ -113,7 +113,7 @@ int llopen(int fd) {
   char message[255];
   int index = 0, res;
   int correctUA = FALSE;
-  int readTotalBytes;
+  int readTotalBytes = 0;
 
   unsigned char buf[5];
   unsigned char SET[5];
@@ -395,7 +395,7 @@ int llclose(int fd) {
   char message[255];
   int index = 0, res;
   int correctUA = FALSE;
-  int readTotalBytes;
+  int readTotalBytes = 0;
 
   unsigned char buf[5];
   unsigned char DISC[5];
@@ -416,7 +416,7 @@ int llclose(int fd) {
 
     time = alarm(3);
       
-    printf("Receiving UA...\n");
+    printf("Receiving UA... ");
     while (index < 5) {
       res = read(fd,buf,1);
       if (res == -1) {
@@ -518,7 +518,7 @@ int main(int argc, char** argv)
       exit(-1);
     }
 
-    printf("New termios structure set\n");
+    printf("New termios structure set\n\n");
 
     (void) signal(SIGALRM, atende); //criar handler para sigalarm
 
@@ -587,9 +587,9 @@ int main(int argc, char** argv)
       exit(1);
     }
 
-    printf("Final control packet sent\n");
+    printf("Final control packet sent\n\n");
 
-    printf("Disconnecting...");
+    printf("Disconnecting...\n");
 
     if(llclose(fd) == -1) {
       perror("Error closing connection\n");

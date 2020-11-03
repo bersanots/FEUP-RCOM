@@ -249,7 +249,7 @@ int llopen(int fd) {
     unsigned char buf[5];
     int index = 0, res;
     
-    printf("Receiving SET...\n");
+    printf("Receiving SET... ");
     while (index < 5) {       
       res = read(fd,buf,1);   
       buf[res] = 0;               
@@ -394,7 +394,7 @@ int llclose(int fd) {
   unsigned char buf[5];
   int index = 0, res;
   
-  printf("Receiving DISC...\n");
+  printf("Receiving DISC... ");
 
   while (index < 5) {       
     res = read(fd,buf,1);   
@@ -471,7 +471,7 @@ int main(int argc, char** argv) {
       exit(-1);
     }
 
-    printf("New termios structure set\n");
+    printf("New termios structure set\n\n");
 
     printf("Establishing connection...\n");
     
@@ -532,7 +532,7 @@ int main(int argc, char** argv) {
 
     close(file_fd);
 
-    printf("Disconnecting... ");
+    printf("Disconnecting...\n");
 
     if(llclose(fd) == -1) {
       perror("Error closing connection\n");
