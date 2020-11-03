@@ -84,7 +84,7 @@ int checkSET(char* SET) {
   return TRUE;
 }
 
-int checkDisc(char* DISC) {
+int checkDISC(char* DISC) {
 
   for(int i=0; i<5; i++) {
     if(DISC[0] != (char) FLAG) {
@@ -171,11 +171,6 @@ int readControlPacket(unsigned char control, char* buffer, off_t *fileSize, unsi
   fileName[*fileNameLength] = '\0';
 
   return 0;
-}
-
-int readDataPacket(char* buffer) {
-
-  
 }
 
 /*int readDiscFrame(int fd, char* buffer) {
@@ -390,14 +385,39 @@ int llread(int fd, char* buffer) {
   return packetSize;
 }
 
-/*int llclose(int fd) {
+int llclose(int fd) {
 
-  readDiscFrame(fd, buffer);
+  unsigned char DISC[5], UA[5];
+  unsigned char buf[5];
+  int index = 0, res;
+  
+  printf("Receiving DISC...\n");
 
-  writeDiscFrame(fd);
+  while (index < 5) {       
+    res = read(fd,buf,1);   
+    buf[res] = 0;               
+    DISC[index++] = buf[0]; 
+  }
 
-  readUa(fd);
-}*/
+  if(checkDISC(DISC) == FALSE) {
+    printf("Error receiving DISC message!\n");
+    exit(1);
+  }
+
+  printf("DISC received\n");
+    
+  UA[0] = FLAG;
+  UA[1] = FIELD_A_SC;
+  UA[2] = CONTROL_UA;
+  UA[3] = UA[1] ^ UA[2];
+  UA[4] = FLAG;
+    
+  printf("Writing UA... ");
+  write(fd, UA, sizeof(UA));
+  printf("UA sent\n");
+
+  return 0;
+}
 
 int main(int argc, char** argv) {
     int fd,c, res;
@@ -479,35 +499,37 @@ int main(int argc, char** argv) {
     printf("First control packet read\n\n");
 
     int numPackets = 0;
-    unsigned char *dataPacket = malloc(0);
+    unsigned char *packet = malloc(0);
+    int packetSize = 0;
+
+    int file_fd = open(fileName, O_RDWR | O_CREAT , 777);
 
     printf("Reading data packets...\n");
 
     while(1) {
-      if(llread(fd, dataPacket) == -1) {
+      packetSize = llread(fd, packet);
+
+      if(packetSize == -1) {
         perror("Error reading data packet\n");
         exit(1);
       }
+      else if (packetSize == 0) continue;
 
-      readDataPacket(dataPacket);
+      if(packet[0] == DATA_PACKET) {
+        write(file_fd, &packet[4], 256 * packet[2] + packet[3]);
+      }
+      else if(packet[0] == CONTROL_PACKET_END) {
+        break;
+      }
 
       printf("Read data packet number %d\n", ++numPackets);
     }
 
     printf("All data packets read\n\n");
 
-    printf("Reading final control packet... ");
-
-    controlPacketSize = llread(fd, controlPacket);
-
-    if(controlPacketSize == -1) {
-      perror("Error reading final control packet\n");
-      exit(1);
-    }
-
-    readControlPacket(CONTROL_PACKET_END, controlPacket, fileSize, fileName, &fileNameLength);
-
     printf("Final control packet read\n\n");
+
+    close(file_fd);
 
     printf("Disconnecting... ");
 
