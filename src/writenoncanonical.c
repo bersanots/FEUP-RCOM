@@ -410,15 +410,9 @@ int llclose(int fd) {
 
   while(tries > 0 && !correctUA) {
 
-    printf("Writing DISC...\n");
+    printf("Writing DISC... ");
     res = write(fd, DISC, sizeof(DISC));
-
-    printf("Message sent:\n");
-    printf("DISC: ");
-    for (int i = 0; i < 5; i++) {
-      printf("%4X ", DISC[i]);
-    }
-    printf("\n");
+    printf("DISC sent\n");
 
     time = alarm(3);
       
@@ -455,12 +449,7 @@ int llclose(int fd) {
         continue;
       }
       else {
-        printf("Message received:\n");
-        printf("UA: ");
-        for (int i = 0; i < 5; i++) {
-          printf("%4X ", message[i]);
-        }
-        printf("\n");
+        printf("UA received\n");
         alarm(0);
         conta = 0;
       }

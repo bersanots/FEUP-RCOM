@@ -96,7 +96,7 @@ int checkDISC(char* DISC) {
     if(DISC[2] != (char) CONTROL_DISC) {
       return FALSE;
     }
-    if(DISC[3] != (char) (FIELD_A_RC ^ CONTROL_DISC)) {
+    if(DISC[3] != (char) (FIELD_A_SC ^ CONTROL_DISC)) {
       return FALSE;
     }
     if(DISC[4] != (char) FLAG) {
@@ -285,7 +285,7 @@ int checkBCC2(unsigned char *buf, int bufSize) {
   return BCC2 == buf[bufSize - 1];
 }
 
-int llread(int fd, char* buffer) {
+unsigned char *llread(int fd, int* size) {
 
   int packetSize = 0;
   int position = 0;
@@ -293,8 +293,7 @@ int llread(int fd, char* buffer) {
   int send = FALSE;
   unsigned char c;
   unsigned char control;
-
-  buffer = malloc(0);
+  unsigned char *buffer = malloc(0);
 
   while (position != 6) {
     read(fd, &c, 1);
@@ -384,7 +383,9 @@ int llread(int fd, char* buffer) {
   else
     packetSize = 0;
 
-  return packetSize;
+  *size = packetSize;
+
+  return buffer;
 }
 
 int llclose(int fd) {
@@ -481,11 +482,10 @@ int main(int argc, char** argv) {
 
     printf("Connection successfully established\n\n");
 
-    unsigned char *controlPacket = malloc(0);
-
     printf("Reading first control packet... ");
 
-    int controlPacketSize = llread(fd, controlPacket);
+    int controlPacketSize;
+    unsigned char *controlPacket = llread(fd, &controlPacketSize);
 
     if(controlPacketSize == -1) {
       perror("Error reading first control packet\n");
@@ -501,15 +501,14 @@ int main(int argc, char** argv) {
     printf("First control packet read\n\n");
 
     int numPackets = 0;
-    unsigned char *packet = malloc(0);
-    int packetSize = 0;
+    int packetSize;
 
     int file_fd = open(fileName, O_RDWR | O_CREAT , 777);
 
     printf("Reading data packets...\n");
 
     while(1) {
-      packetSize = llread(fd, packet);
+      unsigned char *packet = llread(fd, &packetSize);
 
       if(packetSize == -1) {
         perror("Error reading data packet\n");
