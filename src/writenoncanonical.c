@@ -139,6 +139,7 @@ int llopen(int fd) {
     printf("Receiving UA... ");
     while (index < 5) {
       res = read(fd,buf,1);
+      printf("%4X\n", buf[index]);
       if (res == -1) {
         break;
       }
