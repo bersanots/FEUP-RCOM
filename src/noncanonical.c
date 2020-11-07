@@ -234,7 +234,7 @@ unsigned char *llread(int fd, int* size) {
   int packetSize = 0;
   int position = 0;
   int frameNum = 0;
-  int send = FALSE;
+  int accept = FALSE;
   unsigned char c;
   unsigned char control;
   unsigned char *buffer = malloc(0);
@@ -284,15 +284,15 @@ unsigned char *llread(int fd, int* size) {
             else
               sendResponse(fd, C_RR_0);
             position = 6;
-            send = TRUE;
+            accept = TRUE;
           }
           else {
             if (frameNum == 0)
-              sendResponse(fd, C_REJ_1);
-            else
               sendResponse(fd, C_REJ_0);
+            else
+              sendResponse(fd, C_REJ_1);
             position = 6;
-            send = FALSE;
+            accept = FALSE;
           }
         }
         else if (c == ESC)
@@ -322,10 +322,10 @@ unsigned char *llread(int fd, int* size) {
 
   buffer = realloc(buffer, --packetSize);   //remove BCC2
 
-  if (send && frameNum == frameNs)
+  if (accept && frameNum == frameNs)
     frameNs ^= 1;
   else
-    packetSize = 0;
+    packetSize = 0;   //rejected or discard duplicate
 
   *size = packetSize;
 

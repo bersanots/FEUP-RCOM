@@ -292,7 +292,7 @@ unsigned char getResponse(int fd){
     }
   }
 
-  return 0x00;
+  return 0xFF;
 }
 
 int llwrite(int fd, char* buffer, int length) {
@@ -308,11 +308,9 @@ int llwrite(int fd, char* buffer, int length) {
   //C
   if (frameNs == 0) {
     frame[index++] = CONTROL_0;
-    frameNs = 1;
   }
   else {
     frame[index++] = CONTROL_1;
-    frameNs = 0;
   }
 
   frame[index++] = frame[1] ^ frame[2];   //BCC1
@@ -361,11 +359,11 @@ int llwrite(int fd, char* buffer, int length) {
 
   /* --- Send frame --- */
 
-  int sent = FALSE;
+  int accepted = FALSE;
   int tries = 3;
   int res;
 
-  while(tries > 0 && !sent) {
+  while(tries > 0 && !accepted) {
     alarmFlag = FALSE;
     alarm(3);
 
@@ -373,10 +371,12 @@ int llwrite(int fd, char* buffer, int length) {
 
     unsigned char response = getResponse(fd);
 
-    if(response == C_REJ_0 || response == C_REJ_1)   //rejected, resend frame
+    if(response == C_RR_0 && frameNs == 1 || response == C_RR_1 && frameNs == 0) {
+      accepted = TRUE;
+      frameNs ^= 1;
+    }
+    else          //resend frame
       tries--;
-    else               //accepted
-      sent = TRUE;
 
     alarm(0);   //reset alarm
     conta = 0;
