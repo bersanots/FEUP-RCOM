@@ -75,7 +75,7 @@ unsigned char *openFile(unsigned char *fileName, off_t *fileSize) {
   return fileData;
 }
 
-int checkUA(char* ua) {
+int checkUA(unsigned char* ua) {
 	
 	for(int i=0; i<5; i++) {
 		if(i == 0){
@@ -294,7 +294,7 @@ unsigned char getResponse(int fd){
   return 0xFF;
 }
 
-int llwrite(int fd, char* buffer, int length) {
+int llwrite(int fd, unsigned char* buffer, int length) {
   
   int frameLength = length + 6;
   unsigned char *frame = malloc(frameLength * sizeof(unsigned char));
@@ -374,8 +374,10 @@ int llwrite(int fd, char* buffer, int length) {
       accepted = TRUE;
       frameNs ^= 1;
     }
-    else          //resend frame
+    else {          //resend frame
+      printf("Resending frame...\n");
       tries--;
+    }
 
     alarm(0);   //reset alarm
     conta = 0;

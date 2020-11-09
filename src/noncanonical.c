@@ -50,7 +50,7 @@ int success;
 int frameNs = 0;
 
 
-int checkSET(char* SET) {
+int checkSET(unsigned char* SET) {
 
   for(int i=0; i<5; i++) {
     if(i == 0) {
@@ -82,7 +82,7 @@ int checkSET(char* SET) {
   return TRUE;
 }
 
-int checkDISC(char* DISC) {
+int checkDISC(unsigned char* DISC) {
 
   for(int i=0; i<5; i++) {
     if(DISC[0] != (char) FLAG) {
@@ -104,39 +104,7 @@ int checkDISC(char* DISC) {
   return TRUE;
 }
 
-int checkUA(char* ua) {
-	
-	for(int i=0; i<5; i++) {
-		if(i == 0){
-			if(ua[i] != (char) FLAG) {
-				return FALSE;
-			}
-		}		
-		else if(i == 1){
-			if(ua[i] != (char) FIELD_A_SC) {
-				return FALSE;
-			}
-		}
-		else if(i == 2) {
-			if(ua[i] != (char) CONTROL_UA) {
-				return FALSE;
-			}
-		}
-		else if(i == 3) {
-			if(ua[i] != (char) (FIELD_A_SC ^ CONTROL_UA)) {
-				return FALSE;
-			}
-		}
-		else if(i == 4) {
-			if(ua[i] != (char) FLAG) {
-				return FALSE;
-			}
-		}
-	}
-	return TRUE;
-}
-
-int readControlPacket(unsigned char control, char* buffer, off_t *fileSize, unsigned char *fileName, int *fileNameLength) {
+int readControlPacket(unsigned char control, unsigned char* buffer, off_t *fileSize, unsigned char *fileName, int *fileNameLength) {
 
   int index = 0;
   *fileSize = 0;
