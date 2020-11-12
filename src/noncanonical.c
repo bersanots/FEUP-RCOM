@@ -5,104 +5,11 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <stdio.h>
+#include "constants.h"
+#include "SU_frame.h"
 
-#define BAUDRATE B38400
-#define _POSIX_SOURCE 1 /* POSIX compliant source */
-#define FALSE 0
-#define TRUE 1
-
-#define FLAG 0x7E
-#define CONTROL_SET 0x03
-#define CONTROL_DISC 0x0B
-#define CONTROL_UA 0x07
-#define FIELD_A_SC 0x03
-#define FIELD_A_RC 0x01
-#define SET_BCC (FIELD_A_SC ^ CONTROL_SET)
-#define UA_BCC (FIELD_A_SC ^ CONTROL_UA)
-#define BCC_DISC ()
-
-
-#define CONTROL_0 0x00
-#define CONTROL_1 0x40
-
-#define ESC 0x7D
-#define ESC_FLAG 0x5E
-#define ESC_ESC 0x5D
-
-#define DATA_PACKET 0x01
-#define CONTROL_PACKET_START 0x02
-#define CONTROL_PACKET_END 0x03
-
-#define DATA_PACKET_START 0x01
-
-#define FILE_SIZE_FIELD 0x00
-#define FILE_NAME_FIELD 0x01
-
-#define C_RR_0	0x05
-#define C_RR_1	0x85
-#define C_REJ_0	0x01
-#define C_REJ_1	0x81
-
-#define MAX_PACKET_SIZE 256
-
-volatile int STOP=FALSE;
-int success;
+int alarmFlag = FALSE;
 int frameNs = 0;
-
-
-int checkSET(unsigned char* SET) {
-
-  for(int i=0; i<5; i++) {
-    if(i == 0) {
-      if(SET[0] != (char) FLAG) {
-        return FALSE;
-      }
-    }
-    else if(i == 1) {
-      if(SET[1] != (char) FIELD_A_SC) {
-        return FALSE;
-      }
-    }
-    else if(i == 2) {
-      if(SET[2] != (char) CONTROL_SET) {
-        return FALSE;
-      }
-    }
-    else if(i == 3) {
-      if(SET[3] != (char) (FIELD_A_SC ^ CONTROL_SET)) {
-        return FALSE;
-      }
-    }
-    else if(i == 4) {
-      if(SET[4] != (char) FLAG) {
-        return FALSE;
-      }
-    }
-  }
-  return TRUE;
-}
-
-int checkDISC(unsigned char* DISC) {
-
-  for(int i=0; i<5; i++) {
-    if(DISC[0] != (char) FLAG) {
-      return FALSE;
-    }
-    if(DISC[1] != (char) FIELD_A_SC) {
-      return FALSE;
-    }
-    if(DISC[2] != (char) CONTROL_DISC) {
-      return FALSE;
-    }
-    if(DISC[3] != (char) (FIELD_A_SC ^ CONTROL_DISC)) {
-      return FALSE;
-    }
-    if(DISC[4] != (char) FLAG) {
-      return FALSE;
-    }
-  }
-  return TRUE;
-}
 
 int readControlPacket(unsigned char control, unsigned char* buffer, off_t *fileSize, unsigned char *fileName, int *fileNameLength) {
 
@@ -139,50 +46,21 @@ int readControlPacket(unsigned char control, unsigned char* buffer, off_t *fileS
   return 0;
 }
 
-int sendResponse(int fd, unsigned char control) {
-  unsigned char response[5];
-
-  response[0] = FLAG;
-  response[1] = FIELD_A_SC;
-  response[2] = control;
-  response[3] = response[1] ^ response[2];
-  response[4] = FLAG;
-  
-  if(write(fd, response, 5) < 0) {
-    return 1;
-  }
-
-  return 0;
-}
-
 int llopen(int fd) {
-    
-    unsigned char SET[5], UA[5];
-    unsigned char buf[5];
-    int index = 0, res;
-    
-    printf("Receiving SET... ");
-    while (index < 5) {       
-      res = read(fd,buf,1);   
-      buf[res] = 0;               
-      SET[index++] = buf[0]; 
-    }
 
-    if(checkSET(SET) == FALSE) {
+    printf("Receiving SET... ");
+    unsigned char response = getSUframe(fd);
+
+    if(response == CONTROL_SET) {
+      printf("SET received\n");
+    }
+    else {
       printf("Error receiving SET message!\n");
       exit(1);
     }
-
-    printf("SET received\n");
-    
-    UA[0] = FLAG;
-    UA[1] = FIELD_A_SC;
-    UA[2] = CONTROL_UA;
-    UA[3] = UA[1] ^ UA[2];
-    UA[4] = FLAG;
     
     printf("Writing UA... ");
-    write(fd, UA, sizeof(UA));
+    sendSUframe(fd, CONTROL_UA);
     printf("UA sent\n");
 
     return 0; 
@@ -248,17 +126,17 @@ unsigned char *llread(int fd, int* size) {
         if (c == FLAG) {
           if (checkBCC2(buffer, packetSize)) {
             if (frameNum == 0)
-              sendResponse(fd, C_RR_1);
+              sendSUframe(fd, C_RR_1);
             else
-              sendResponse(fd, C_RR_0);
+              sendSUframe(fd, C_RR_0);
             position = 6;
             accept = TRUE;
           }
           else {
             if (frameNum == 0)
-              sendResponse(fd, C_REJ_0);
+              sendSUframe(fd, C_REJ_0);
             else
-              sendResponse(fd, C_REJ_1);
+              sendSUframe(fd, C_REJ_1);
             position = 6;
             accept = FALSE;
           }
@@ -301,34 +179,20 @@ unsigned char *llread(int fd, int* size) {
 }
 
 int llclose(int fd) {
-
-  unsigned char DISC[5], UA[5];
-  unsigned char buf[5];
-  int index = 0, res;
   
   printf("Receiving DISC... ");
+  unsigned char response = getSUframe(fd);
 
-  while (index < 5) {       
-    res = read(fd,buf,1);   
-    buf[res] = 0;               
-    DISC[index++] = buf[0]; 
+  if (response == CONTROL_DISC) {
+    printf("DISC received\n");
   }
-
-  if(checkDISC(DISC) == FALSE) {
+  else {
     printf("Error receiving DISC message!\n");
     exit(1);
   }
-
-  printf("DISC received\n");
-    
-  UA[0] = FLAG;
-  UA[1] = FIELD_A_SC;
-  UA[2] = CONTROL_UA;
-  UA[3] = UA[1] ^ UA[2];
-  UA[4] = FLAG;
     
   printf("Writing UA... ");
-  write(fd, UA, sizeof(UA));
+  sendSUframe(fd, CONTROL_UA);
   printf("UA sent\n");
 
   return 0;

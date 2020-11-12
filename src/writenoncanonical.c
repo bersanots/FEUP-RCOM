@@ -6,53 +6,16 @@
 #include <termios.h>
 #include <stdio.h>
 #include <signal.h>
+#include "constants.h"
+#include "SU_frame.h"
 
-#define BAUDRATE B38400
-#define MODEMDEVICE "/dev/ttyS1"
-#define _POSIX_SOURCE 1 /* POSIX compliant source */
-#define FALSE 0
-#define TRUE 1
-
-#define FLAG 0x7E
-#define CONTROL_SET 0x03
-#define CONTROL_DISC 0x0B
-#define CONTROL_UA 0x07
-#define FIELD_A_SC 0x03
-#define FIELD_A_RC 0x01
-#define SET_BCC (FIELD_A_SC ^ CONTROL_SET)
-#define UA_BCC (FIELD_A_SC ^ CONTROL_UA)
-
-#define CONTROL_0 0x00
-#define CONTROL_1 0x40
-
-#define ESC 0x7D
-#define ESC_FLAG 0x5E
-#define ESC_ESC 0x5D
-
-#define DATA_PACKET 0x01
-#define CONTROL_PACKET_START 0x02
-#define CONTROL_PACKET_END 0x03
-
-#define FILE_SIZE_FIELD 0x00
-#define FILE_NAME_FIELD 0x01
-
-#define C_RR_0	0x05
-#define C_RR_1	0x85
-#define C_REJ_0	0x01
-#define C_REJ_1	0x81
-
-#define MAX_PACKET_SIZE 256
-
-#define FILENAME "pinguim.gif"
-
-volatile int STOP=FALSE;
 int alarmFlag = FALSE;
 int conta = 0;
 int frameNs = 0;
 
 void atende() { // atende alarme
-	printf("alarme # %d\n", ++conta);
-	alarmFlag=TRUE;
+	printf("alarme #%d\n", ++conta);
+	alarmFlag = TRUE;
 }
 
 unsigned char *openFile(unsigned char *fileName, off_t *fileSize) {
@@ -75,103 +38,37 @@ unsigned char *openFile(unsigned char *fileName, off_t *fileSize) {
   return fileData;
 }
 
-int checkUA(unsigned char* ua) {
-	
-	for(int i=0; i<5; i++) {
-		if(i == 0){
-			if(ua[i] != (char) FLAG) {
-				return FALSE;
-			}
-		}		
-		else if(i == 1){
-			if(ua[i] != (char) FIELD_A_SC) {
-				return FALSE;
-			}
-		}
-		else if(i == 2) {
-			if(ua[i] != (char) CONTROL_UA) {
-				return FALSE;
-			}
-		}
-		else if(i == 3) {
-			if(ua[i] != (char) (FIELD_A_SC ^ CONTROL_UA)) {
-				return FALSE;
-			}
-		}
-		else if(i == 4) {
-			if(ua[i] != (char) FLAG) {
-				return FALSE;
-			}
-		}
-	}
-	return TRUE;
-}
-
 int llopen(int fd) {
 
-  int tries = 3;
-  char message[255];
-  int index = 0, res;
+  int tries = MAX_TRIES;
   int correctUA = FALSE;
-  int readTotalBytes = 0;
-
-  unsigned char buf[5];
-  unsigned char SET[5];
-
-  SET[0] = FLAG;
-  SET[1] = FIELD_A_SC;
-  SET[2] = CONTROL_SET;
-  SET[3] = SET[1] ^ SET[2];
-  SET[4] = FLAG;
-
   int time;
 
   while(tries > 0 && !correctUA) {
 
     printf("Writing SET... ");
-    res = write(fd, SET, sizeof(SET));
+    sendSUframe(fd, CONTROL_SET);
     printf("SET sent\n");
 
-    alarm(3);
+    alarmFlag = FALSE;
+    alarm(TIMEOUT);
 
-    time = alarm(3);
+    time = alarm(TIMEOUT);
       
     printf("Receiving UA... ");
-    while (index < 5) {
-      res = read(fd,buf,1);
-      if (res == -1) {
-        break;
-      }
-      buf[res] = 0;
-      readTotalBytes += res;
-      message[index++] = buf[0];
-    }
+    unsigned char response = getSUframe(fd);
 
-    if (res == -1) {
-      printf("UA was not read!\n");
-      while (time = alarm(time)) {
-        sleep(1);
-      }
-      alarmFlag = FALSE;
+    if(response == CONTROL_UA) {
+      printf("UA received\n");
+      correctUA = TRUE;
+    }
+    else {          //resend SET
+      printf("Error reading UA message!\n");
       tries--;
-      continue;
     }
 
-    if (readTotalBytes == 5) { //UA foi lido
-      correctUA = checkUA(message);
-      if (correctUA == FALSE) {
-        printf("Error reading UA message!\n");
-        while (time = alarm(time)) {
-          sleep(1);
-        }
-        alarmFlag = FALSE;
-        tries--;
-        continue;
-      }
-      else {
-        printf("UA received\n");
-      }
-    }
+    alarm(0);   //reset alarm
+    conta = 0;
   }
 
   if(tries == 0){
@@ -244,56 +141,6 @@ unsigned char *buildDataPacket(unsigned char *data, int *dataPacketNum, int *pac
   return packet;
 }
 
-unsigned char getResponse(int fd){
-  int position = 0;
-  unsigned char c;
-  unsigned char control;
-
-  while (!alarmFlag && position != 5) {
-    read(fd, &c, 1);
-    switch (position) {
-      case 0:
-        if (c == FLAG)
-          position = 1;
-        break;
-      case 1:
-        if (c == FIELD_A_SC)
-          position = 2;
-        else if (c == FLAG)
-          position = 1;
-        else
-          position = 0;
-        break;
-      case 2:
-        if (c == C_RR_0 || c == C_RR_1 || c == C_REJ_0 || c == C_REJ_1 || c == CONTROL_DISC) {
-          control = c;
-          position = 3;
-        }
-        else if (c == FLAG)
-          position = 1;
-        else
-          position = 0;
-        break;
-      case 3:
-        if (c == FIELD_A_SC ^ control)
-          position = 4;
-        else
-          position = 0;
-        break;
-      case 4:
-        if (c == FLAG) {
-          position = 5;
-          return control;
-        }
-        else
-          position = 0;
-        break;
-    }
-  }
-
-  return 0xFF;
-}
-
 int llwrite(int fd, unsigned char* buffer, int length) {
   
   int frameLength = length + 6;
@@ -359,16 +206,15 @@ int llwrite(int fd, unsigned char* buffer, int length) {
   /* --- Send frame --- */
 
   int accepted = FALSE;
-  int tries = 3;
-  int res;
+  int tries = MAX_TRIES;
 
   while(tries > 0 && !accepted) {
     alarmFlag = FALSE;
-    alarm(3);
+    alarm(TIMEOUT);
 
-    res = write(fd, frame, index);
+    write(fd, frame, index);
 
-    unsigned char response = getResponse(fd);
+    unsigned char response = getSUframe(fd);
 
     if(response == C_RR_0 && frameNs == 1 || response == C_RR_1 && frameNs == 0) {
       accepted = TRUE;
@@ -393,69 +239,33 @@ int llwrite(int fd, unsigned char* buffer, int length) {
 
 int llclose(int fd) {
 
-  int tries = 3;
-  char message[255];
-  int index = 0, res;
+  int tries = MAX_TRIES;
   int correctUA = FALSE;
-  int readTotalBytes = 0;
-
-  unsigned char buf[5];
-  unsigned char DISC[5];
-
-  DISC[0] = FLAG;
-  DISC[1] = FIELD_A_SC;
-  DISC[2] = CONTROL_DISC;
-  DISC[3] = DISC[1] ^ DISC[2];
-  DISC[4] = FLAG;
-
   int time;
 
   while(tries > 0 && !correctUA) {
 
     printf("Writing DISC... ");
-    res = write(fd, DISC, sizeof(DISC));
+    sendSUframe(fd, CONTROL_DISC);
     printf("DISC sent\n");
 
-    time = alarm(3);
+    alarmFlag = FALSE;
+    time = alarm(TIMEOUT);
       
     printf("Receiving UA... ");
-    while (index < 5) {
-      res = read(fd,buf,1);
-      if (res == -1) {
-        break;
-      }
-      buf[res] = 0;
-      readTotalBytes += res;
-      message[index++] = buf[0];
-    }
+    unsigned char response = getSUframe(fd);
 
-    if (res == -1) {
-      printf("UA was not read!\n");
-      while (time = alarm(time)) {
-        sleep(1);
-      }
-      alarmFlag = FALSE;
+    if(response == CONTROL_UA) {
+      printf("UA received\n");
+      correctUA = TRUE;
+    }
+    else {          //resend SET
+      printf("Error reading UA message!\n");
       tries--;
-      continue;
     }
 
-    if (readTotalBytes == 5) { //UA foi lido
-      correctUA = checkUA(message);
-      if (correctUA == FALSE) {
-        printf("Error reading UA message!\n");
-        while (time = alarm(time)) {
-          sleep(1);
-        }
-        alarmFlag = FALSE;
-        tries--;
-        continue;
-      }
-      else {
-        printf("UA received\n");
-        alarm(0);
-        conta = 0;
-      }
-    }
+    alarm(0);   //reset alarm
+    conta = 0;
   }
 
   if(tries == 0){
