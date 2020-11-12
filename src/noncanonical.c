@@ -5,11 +5,13 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <stdio.h>
+#include <time.h>
 #include "constants.h"
 #include "SU_frame.h"
 
 int alarmFlag = FALSE;
 int frameNs = 0;
+int framesReceived = 0, RRcount = 0, REJcount = 0;
 
 int readControlPacket(unsigned char control, unsigned char* buffer, off_t *fileSize, unsigned char *fileName, int *fileNameLength) {
 
@@ -129,17 +131,28 @@ unsigned char *llread(int fd, int* size) {
               sendSUframe(fd, C_RR_1);
             else
               sendSUframe(fd, C_RR_0);
-            position = 6;
             accept = TRUE;
+            RRcount++;
           }
           else {
-            if (frameNum == 0)
-              sendSUframe(fd, C_REJ_0);
-            else
-              sendSUframe(fd, C_REJ_1);
-            position = 6;
+            if (frameNum == frameNs) {
+              if (frameNum == 0)
+                sendSUframe(fd, C_REJ_0);
+              else
+                sendSUframe(fd, C_REJ_1);
+              REJcount++;
+            }
+            else {
+              if (frameNum == 0)
+                sendSUframe(fd, C_RR_1);
+              else
+                sendSUframe(fd, C_RR_0);
+              RRcount++;
+            }
             accept = FALSE;
           }
+          position = 6;
+          framesReceived++;          
         }
         else if (c == ESC)
           position = 5;
@@ -235,10 +248,6 @@ int main(int argc, char** argv) {
     newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
     newtio.c_cc[VMIN]     = 1;   /* blocking read until 5 chars received */
   
-  /* 
-    VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a 
-    leitura do(s) próximo(s) caracter(es)
-  */
 
     tcflush(fd, TCIOFLUSH);
 
@@ -248,6 +257,10 @@ int main(int argc, char** argv) {
     }
 
     printf("New termios structure set\n\n");
+
+    clock_t start_t, end_t, total_t;
+
+    start_t = clock();
 
     printf("[Establishing connection...]\n");
     
@@ -320,16 +333,24 @@ int main(int argc, char** argv) {
       exit(1);
     }
 
-    printf("Connection successfully closed\n");
-  
+    printf("Connection successfully closed\n\n");
 
-  /* 
-    O ciclo WHILE deve ser alterado de modo a respeitar o indicado no guião 
-  */
+    end_t = clock();
+
+    total_t = (double)(end_t - start_t) / CLOCKS_PER_SEC;
+
+    printf("[Protocol Efficiency Statistics:]\n");
+    printf("Elapsed time: %f seconds\n", total_t);
+    printf("Number of information frames received: %d\n", framesReceived);
+    printf("Number of packets rejected (REJ frames sent): %d\n", REJcount);
+    printf("Number of packets accepted (RR frames sent): %d\n", RRcount);
 
 
+    if (tcsetattr(fd,TCSANOW,&oldtio) == -1) {
+      perror("tcsetattr");
+      exit(-1);
+    }
 
-    tcsetattr(fd,TCSANOW,&oldtio);
     close(fd);
     return 0;
 }

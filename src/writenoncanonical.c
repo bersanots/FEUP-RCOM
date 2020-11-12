@@ -6,12 +6,14 @@
 #include <termios.h>
 #include <stdio.h>
 #include <signal.h>
+#include <time.h>
 #include "constants.h"
 #include "SU_frame.h"
 
 int alarmFlag = FALSE;
 int conta = 0;
 int frameNs = 0;
+int framesSent = 0, RRcount = 0, REJcount = 0;
 
 void atende() { // atende alarme
 	printf("alarme #%d\n", ++conta);
@@ -213,6 +215,7 @@ int llwrite(int fd, unsigned char* buffer, int length) {
     alarm(TIMEOUT);
 
     write(fd, frame, index);
+    framesSent++;
 
     unsigned char response = getSUframe(fd);
 
@@ -224,6 +227,11 @@ int llwrite(int fd, unsigned char* buffer, int length) {
       printf("Resending frame...\n");
       tries--;
     }
+
+    if(response == C_RR_0 || response == C_RR_1)
+      RRcount++;
+    else if(response == C_REJ_0 || response == C_REJ_1)
+      REJcount++;
 
     alarm(0);   //reset alarm
     conta = 0;
@@ -317,12 +325,6 @@ int main(int argc, char** argv)
     newtio.c_cc[VMIN]     = 1;   /* blocking read until 5 chars received */
 
 
-
-  /* 
-    VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a 
-    leitura do(s) pr�ximo(s) caracter(es)
-  */
-
 	  tcflush(fd, TCIOFLUSH);
 
     if ( tcsetattr(fd,TCSANOW,&newtio) == -1) {
@@ -333,6 +335,10 @@ int main(int argc, char** argv)
     printf("New termios structure set\n\n");
 
     (void) signal(SIGALRM, atende); //criar handler para sigalarm
+
+    clock_t start_t, end_t, total_t;
+
+    start_t = clock();
 
     printf("[Establishing connection...]\n");
 
@@ -414,24 +420,23 @@ int main(int argc, char** argv)
       exit(1);
     }
 
-    printf("Connection successfully closed\n");
- 
+    printf("Connection successfully closed\n\n");
 
-  /* 
-    O ciclo FOR e as instru��es seguintes devem ser alterados de modo a respeitar 
-    o indicado no gui�o 
-  */
+    end_t = clock();
 
+    total_t = (double)(end_t - start_t) / CLOCKS_PER_SEC;
 
+    printf("[Protocol Efficiency Statistics:]\n");
+    printf("Elapsed time: %f seconds\n", end_t);
+    printf("Number of information frames sent: %d\n", framesSent);
+    printf("Number of packets rejected (REJ frames received): %d\n", REJcount);
+    printf("Number of packets accepted (RR frames received): %d\n", RRcount);
 
    
-    if ( tcsetattr(fd,TCSANOW,&oldtio) == -1) {
+    if (tcsetattr(fd,TCSANOW,&oldtio) == -1) {
       perror("tcsetattr");
       exit(-1);
     }
-
-
-
 
     close(fd);
     return 0;
