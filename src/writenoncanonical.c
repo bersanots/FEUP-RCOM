@@ -222,7 +222,7 @@ unsigned char *splitFileData(unsigned char *data, off_t fileSize, int dataPacket
 
   unsigned char *packet = malloc(*packetSize);
 
-  memcpy(packet, &data[dataPacketNum * MAX_PACKET_SIZE], *packetSize);
+  memcpy(packet, &data[(dataPacketNum - 1) * MAX_PACKET_SIZE], *packetSize);
 
   return packet;
 }
