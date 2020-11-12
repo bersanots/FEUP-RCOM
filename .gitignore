@@ -1,6 +1,7 @@
-#Everything except .c files
+#Everything except .c or .h files
 *
-!*/*.c
+!*.c
+!*.h
 
 # Prerequisites
 *.d
