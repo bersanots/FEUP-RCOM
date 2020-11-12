@@ -412,6 +412,8 @@ int main(int argc, char** argv) {
 
     printf("First control packet read\n\n");
 
+    printf("File name: %s     File size: %i bytes\n\n", fileName, fileSize);
+
     int numPackets = 0;
     int packetSize;
     int totalSize = 0;

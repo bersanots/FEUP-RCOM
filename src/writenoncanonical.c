@@ -216,13 +216,13 @@ unsigned char *splitFileData(unsigned char *data, off_t fileSize, int dataPacket
 
   *packetSize = MAX_PACKET_SIZE;
 
-  if (dataPacketNum * MAX_PACKET_SIZE > fileSize) {
-    *packetSize = fileSize - (dataPacketNum - 1) * MAX_PACKET_SIZE;
+  if ((dataPacketNum + 1) * MAX_PACKET_SIZE > fileSize) {
+    *packetSize = fileSize - dataPacketNum * MAX_PACKET_SIZE;
   }
 
   unsigned char *packet = malloc(*packetSize);
 
-  memcpy(packet, &data[(dataPacketNum - 1) * MAX_PACKET_SIZE], *packetSize);
+  memcpy(packet, &data[dataPacketNum * MAX_PACKET_SIZE], *packetSize);
 
   return packet;
 }
@@ -557,8 +557,9 @@ int main(int argc, char** argv)
 
     printf("First control packet sent\n\n");
     
-    int numPackets = 1;
+    int numPackets = 0;
     int totalPackets = fileSize / MAX_PACKET_SIZE;
+    int totalSize = 0;
 
     if(fileSize % MAX_PACKET_SIZE != 0) {
       totalPackets++;
@@ -567,8 +568,10 @@ int main(int argc, char** argv)
     printf("[Sending data packets...]\n");
     
     //send message packets
-    while(numPackets <= totalPackets) {
+    while(numPackets < totalPackets) {
       unsigned char *data = splitFileData(file, fileSize, numPackets, &packetSize);
+
+      totalSize += packetSize;
 
       unsigned char *dataPacket = buildDataPacket(data, &numPackets, &packetSize);
 
@@ -577,10 +580,11 @@ int main(int argc, char** argv)
         exit(1);
       }
 
-      printf("Sent data packet number %d with %d bytes\n", numPackets - 1, packetSize - 4);
+      printf("Sent data packet number %d with %d bytes\n", numPackets, packetSize - 4);
     }
 
-    printf("Data packets sent\n\n");
+    printf("All data packets sent\n");
+    printf("Total size: %d bytes\n\n", totalSize);
 
     controlPacket = buildControlPacket(CONTROL_PACKET_END, fileSize, fileName, &packetSize);
 
