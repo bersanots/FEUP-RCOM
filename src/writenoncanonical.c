@@ -11,12 +11,12 @@
 #include "SU_frame.h"
 
 int alarmFlag = FALSE;
-int conta = 0;
+int contaAlarme = 0;
 int frameNs = 0;
 int framesSent = 0, RRcount = 0, REJcount = 0;
 
 void atende() { // atende alarme
-	printf("alarme #%d\n", ++conta);
+	printf("alarme #%d\n", ++contaAlarme);
 	alarmFlag = TRUE;
 }
 
@@ -44,7 +44,6 @@ int llopen(int fd) {
 
   int tries = MAX_TRIES;
   int correctUA = FALSE;
-  int time;
 
   while(tries > 0 && !correctUA) {
 
@@ -54,8 +53,6 @@ int llopen(int fd) {
 
     alarmFlag = FALSE;
     alarm(TIMEOUT);
-
-    time = alarm(TIMEOUT);
       
     printf("Receiving UA... ");
     unsigned char response = getSUframe(fd);
@@ -70,7 +67,7 @@ int llopen(int fd) {
     }
 
     alarm(0);   //reset alarm
-    conta = 0;
+    contaAlarme = 0;
   }
 
   if(tries == 0){
@@ -211,11 +208,12 @@ int llwrite(int fd, unsigned char* buffer, int length) {
   int tries = MAX_TRIES;
 
   while(tries > 0 && !accepted) {
-    alarmFlag = FALSE;
-    alarm(TIMEOUT);
 
     write(fd, frame, index);
     framesSent++;
+
+    alarmFlag = FALSE;
+    alarm(TIMEOUT);
 
     unsigned char response = getSUframe(fd);
 
@@ -234,7 +232,7 @@ int llwrite(int fd, unsigned char* buffer, int length) {
       REJcount++;
 
     alarm(0);   //reset alarm
-    conta = 0;
+    contaAlarme = 0;
   }
 
   if(tries == 0){
@@ -249,7 +247,6 @@ int llclose(int fd) {
 
   int tries = MAX_TRIES;
   int correctUA = FALSE;
-  int time;
 
   while(tries > 0 && !correctUA) {
 
@@ -258,7 +255,7 @@ int llclose(int fd) {
     printf("DISC sent\n");
 
     alarmFlag = FALSE;
-    time = alarm(TIMEOUT);
+    alarm(TIMEOUT);
       
     printf("Receiving UA... ");
     unsigned char response = getSUframe(fd);
@@ -273,7 +270,7 @@ int llclose(int fd) {
     }
 
     alarm(0);   //reset alarm
-    conta = 0;
+    contaAlarme = 0;
   }
 
   if(tries == 0){
