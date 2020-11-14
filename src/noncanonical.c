@@ -258,9 +258,7 @@ int main(int argc, char** argv) {
 
     printf("New termios structure set\n\n");
 
-    clock_t start_t, end_t, total_t;
-
-    start_t = clock();
+    clock_t start_t = clock();
 
     printf("[Establishing connection...]\n");
     
@@ -335,12 +333,10 @@ int main(int argc, char** argv) {
 
     printf("Connection successfully closed\n\n");
 
-    end_t = clock();
-
-    total_t = (double)(end_t - start_t) / CLOCKS_PER_SEC;
+    clock_t end_t = clock();
 
     printf("[Protocol Efficiency Statistics:]\n");
-    printf("Elapsed time: %f seconds\n", total_t);
+    printf("Elapsed time: %f seconds\n", (end_t - start_t) / (double) CLOCKS_PER_SEC);
     printf("Number of information frames received: %d\n", framesReceived);
     printf("Number of packets rejected (REJ frames sent): %d\n", REJcount);
     printf("Number of packets accepted (RR frames sent): %d\n", RRcount);
