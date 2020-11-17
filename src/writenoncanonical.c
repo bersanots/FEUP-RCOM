@@ -65,10 +65,10 @@ int llopen(int fd) {
       printf("Error reading UA message!\n");
       tries--;
     }
-
-    alarm(0);   //reset alarm
-    contaAlarme = 0;
   }
+	
+  alarm(0);   //reset alarm
+  contaAlarme = 0;
 
   if(tries == 0){
     printf("Error: Reached maximum number of tries\n");
@@ -230,10 +230,10 @@ int llwrite(int fd, unsigned char* buffer, int length) {
       RRcount++;
     else if(response == C_REJ_0 || response == C_REJ_1)
       REJcount++;
-
-    alarm(0);   //reset alarm
-    contaAlarme = 0;
   }
+	
+  alarm(0);   //reset alarm
+  contaAlarme = 0;
 
   if(tries == 0){
     printf("Error: Reached maximum number of tries\n");
@@ -268,10 +268,10 @@ int llclose(int fd) {
       printf("Error reading UA message!\n");
       tries--;
     }
-
-    alarm(0);   //reset alarm
-    contaAlarme = 0;
   }
+	
+  alarm(0);   //reset alarm
+  contaAlarme = 0;
 
   if(tries == 0){
     printf("Error: Reached maximum number of tries\n");
@@ -331,7 +331,13 @@ int main(int argc, char** argv)
 
     printf("New termios structure set\n\n");
 
-    (void) signal(SIGALRM, atende); //criar handler para sigalarm
+    struct sigaction newAction, oldAction;
+
+    newAction.sa_handler = atende;
+    sigemptyset(&newAction.sa_mask);
+    newAction.sa_flags = 0;
+
+    sigaction(SIGALRM, &newAction, &oldAction);
 
     clock_t start_t = clock();
 
