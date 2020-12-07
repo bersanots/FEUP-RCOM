@@ -6,53 +6,18 @@
 #include <termios.h>
 #include <stdio.h>
 #include <signal.h>
+#include <time.h>
+#include "constants.h"
+#include "SU_frame.h"
 
-#define BAUDRATE B38400
-#define MODEMDEVICE "/dev/ttyS1"
-#define _POSIX_SOURCE 1 /* POSIX compliant source */
-#define FALSE 0
-#define TRUE 1
-
-#define FLAG 0x7E
-#define CONTROL_SET 0x03
-#define CONTROL_DISC 0x0B
-#define CONTROL_UA 0x07
-#define FIELD_A_SC 0x03
-#define FIELD_A_RC 0x01
-#define SET_BCC (FIELD_A_SC ^ CONTROL_SET)
-#define UA_BCC (FIELD_A_SC ^ CONTROL_UA)
-
-#define CONTROL_0 0x00
-#define CONTROL_1 0x40
-
-#define ESC 0x7D
-#define ESC_FLAG 0x5E
-#define ESC_ESC 0x5D
-
-#define DATA_PACKET 0x01
-#define CONTROL_PACKET_START 0x02
-#define CONTROL_PACKET_END 0x03
-
-#define FILE_SIZE_FIELD 0x00
-#define FILE_NAME_FIELD 0x01
-
-#define C_RR_0	0x05
-#define C_RR_1	0x85
-#define C_REJ_0	0x01
-#define C_REJ_1	0x81
-
-#define MAX_PACKET_SIZE 256
-
-#define FILENAME "pinguim.gif"
-
-volatile int STOP=FALSE;
 int alarmFlag = FALSE;
-int conta = 0;
+int contaAlarme = 0;
 int frameNs = 0;
+int framesSent = 0, RRcount = 0, REJcount = 0;
 
 void atende() { // atende alarme
-	printf("alarme # %d\n", ++conta);
-	alarmFlag=TRUE;
+	printf("alarme #%d\n", ++contaAlarme);
+	alarmFlag = TRUE;
 }
 
 unsigned char *openFile(unsigned char *fileName, off_t *fileSize) {
@@ -75,68 +40,22 @@ unsigned char *openFile(unsigned char *fileName, off_t *fileSize) {
   return fileData;
 }
 
-int checkUA(char* ua) {
-	
-	for(int i=0; i<5; i++) {
-		if(i == 0){
-			if(ua[i] != (char) FLAG) {
-				return FALSE;
-			}
-		}		
-		else if(i == 1){
-			if(ua[i] != (char) FIELD_A_SC) {
-				return FALSE;
-			}
-		}
-		else if(i == 2) {
-			if(ua[i] != (char) CONTROL_UA) {
-				return FALSE;
-			}
-		}
-		else if(i == 3) {
-			if(ua[i] != (char) (FIELD_A_SC ^ CONTROL_UA)) {
-				return FALSE;
-			}
-		}
-		else if(i == 4) {
-			if(ua[i] != (char) FLAG) {
-				return FALSE;
-			}
-		}
-	}
-	return TRUE;
-}
-
 int llopen(int fd) {
 
-  int tries = 3;
-  char message[255];
-  int index = 0, res;
+  int tries = MAX_TRIES;
   int correctUA = FALSE;
-  int readTotalBytes = 0;
-
-  unsigned char buf[5];
-  unsigned char SET[5];
-
-  SET[0] = FLAG;
-  SET[1] = FIELD_A_SC;
-  SET[2] = CONTROL_SET;
-  SET[3] = SET[1] ^ SET[2];
-  SET[4] = FLAG;
-
-  int time;
 
   while(tries > 0 && !correctUA) {
 
     printf("Writing SET... ");
-    res = write(fd, SET, sizeof(SET));
+    sendSUframe(fd, CONTROL_SET);
     printf("SET sent\n");
 
-    alarm(3);
-
-    time = alarm(3);
+    alarmFlag = FALSE;
+    alarm(TIMEOUT);
       
     printf("Receiving UA... ");
+<<<<<<< HEAD
     while (index < 5) {
       res = read(fd,buf,1);
       printf("%4X\n", buf[index]);
@@ -147,33 +66,22 @@ int llopen(int fd) {
       readTotalBytes += res;
       message[index++] = buf[0];
     }
+=======
+    unsigned char response = getSUframe(fd);
+>>>>>>> 950c45c6e2e3081b89f1d1ac7cdbde0d6bb1f026
 
-    if (res == -1) {
-      printf("UA was not read!\n");
-      while (time = alarm(time)) {
-        sleep(1);
-      }
-      alarmFlag = FALSE;
-      tries--;
-      continue;
+    if(response == CONTROL_UA) {
+      printf("UA received\n");
+      correctUA = TRUE;
     }
-
-    if (readTotalBytes == 5) { //UA foi lido
-      correctUA = checkUA(message);
-      if (correctUA == FALSE) {
-        printf("Error reading UA message!\n");
-        while (time = alarm(time)) {
-          sleep(1);
-        }
-        alarmFlag = FALSE;
-        tries--;
-        continue;
-      }
-      else {
-        printf("UA received\n");
-      }
+    else {          //resend SET
+      printf("Error reading UA message!\n");
+      tries--;
     }
   }
+	
+  alarm(0);   //reset alarm
+  contaAlarme = 0;
 
   if(tries == 0){
     printf("Error: Reached maximum number of tries\n");
@@ -217,8 +125,8 @@ unsigned char *splitFileData(unsigned char *data, off_t fileSize, int dataPacket
 
   *packetSize = MAX_PACKET_SIZE;
 
-  if (dataPacketNum * MAX_PACKET_SIZE > fileSize) {
-    *packetSize = fileSize - (dataPacketNum - 1) * MAX_PACKET_SIZE;
+  if ((dataPacketNum + 1) * MAX_PACKET_SIZE > fileSize) {
+    *packetSize = fileSize - dataPacketNum * MAX_PACKET_SIZE;
   }
 
   unsigned char *packet = malloc(*packetSize);
@@ -245,57 +153,7 @@ unsigned char *buildDataPacket(unsigned char *data, int *dataPacketNum, int *pac
   return packet;
 }
 
-unsigned char getResponse(int fd){
-  int position = 0;
-  unsigned char c;
-  unsigned char control;
-
-  while (!alarmFlag && position != 5) {
-    read(fd, &c, 1);
-    switch (position) {
-      case 0:
-        if (c == FLAG)
-          position = 1;
-        break;
-      case 1:
-        if (c == FIELD_A_SC)
-          position = 2;
-        else if (c == FLAG)
-          position = 1;
-        else
-          position = 0;
-        break;
-      case 2:
-        if (c == C_RR_0 || c == C_RR_1 || c == C_REJ_0 || c == C_REJ_1 || c == CONTROL_DISC) {
-          control = c;
-          position = 3;
-        }
-        else if (c == FLAG)
-          position = 1;
-        else
-          position = 0;
-        break;
-      case 3:
-        if (c == FIELD_A_SC ^ control)
-          position = 4;
-        else
-          position = 0;
-        break;
-      case 4:
-        if (c == FLAG) {
-          position = 5;
-          return control;
-        }
-        else
-          position = 0;
-        break;
-    }
-  }
-
-  return 0xFF;
-}
-
-int llwrite(int fd, char* buffer, int length) {
+int llwrite(int fd, unsigned char* buffer, int length) {
   
   int frameLength = length + 6;
   unsigned char *frame = malloc(frameLength * sizeof(unsigned char));
@@ -360,27 +218,35 @@ int llwrite(int fd, char* buffer, int length) {
   /* --- Send frame --- */
 
   int accepted = FALSE;
-  int tries = 3;
-  int res;
+  int tries = MAX_TRIES;
 
   while(tries > 0 && !accepted) {
+
+    write(fd, frame, index);
+    framesSent++;
+
     alarmFlag = FALSE;
-    alarm(3);
+    alarm(TIMEOUT);
 
-    res = write(fd, frame, index);
-
-    unsigned char response = getResponse(fd);
+    unsigned char response = getSUframe(fd);
 
     if(response == C_RR_0 && frameNs == 1 || response == C_RR_1 && frameNs == 0) {
       accepted = TRUE;
       frameNs ^= 1;
     }
-    else          //resend frame
+    else {          //resend frame
+      printf("Resending frame...\n");
       tries--;
+    }
 
-    alarm(0);   //reset alarm
-    conta = 0;
+    if(response == C_RR_0 || response == C_RR_1)
+      RRcount++;
+    else if(response == C_REJ_0 || response == C_REJ_1)
+      REJcount++;
   }
+	
+  alarm(0);   //reset alarm
+  contaAlarme = 0;
 
   if(tries == 0){
     printf("Error: Reached maximum number of tries\n");
@@ -392,70 +258,33 @@ int llwrite(int fd, char* buffer, int length) {
 
 int llclose(int fd) {
 
-  int tries = 3;
-  char message[255];
-  int index = 0, res;
+  int tries = MAX_TRIES;
   int correctUA = FALSE;
-  int readTotalBytes = 0;
-
-  unsigned char buf[5];
-  unsigned char DISC[5];
-
-  DISC[0] = FLAG;
-  DISC[1] = FIELD_A_SC;
-  DISC[2] = CONTROL_DISC;
-  DISC[3] = DISC[1] ^ DISC[2];
-  DISC[4] = FLAG;
-
-  int time;
 
   while(tries > 0 && !correctUA) {
 
     printf("Writing DISC... ");
-    res = write(fd, DISC, sizeof(DISC));
+    sendSUframe(fd, CONTROL_DISC);
     printf("DISC sent\n");
 
-    time = alarm(3);
+    alarmFlag = FALSE;
+    alarm(TIMEOUT);
       
     printf("Receiving UA... ");
-    while (index < 5) {
-      res = read(fd,buf,1);
-      if (res == -1) {
-        break;
-      }
-      buf[res] = 0;
-      readTotalBytes += res;
-      message[index++] = buf[0];
-    }
+    unsigned char response = getSUframe(fd);
 
-    if (res == -1) {
-      printf("UA was not read!\n");
-      while (time = alarm(time)) {
-        sleep(1);
-      }
-      alarmFlag = FALSE;
+    if(response == CONTROL_UA) {
+      printf("UA received\n");
+      correctUA = TRUE;
+    }
+    else {          //resend SET
+      printf("Error reading UA message!\n");
       tries--;
-      continue;
-    }
-
-    if (readTotalBytes == 5) { //UA foi lido
-      correctUA = checkUA(message);
-      if (correctUA == FALSE) {
-        printf("Error reading UA message!\n");
-        while (time = alarm(time)) {
-          sleep(1);
-        }
-        alarmFlag = FALSE;
-        tries--;
-        continue;
-      }
-      else {
-        printf("UA received\n");
-        alarm(0);
-        conta = 0;
-      }
     }
   }
+	
+  alarm(0);   //reset alarm
+  contaAlarme = 0;
 
   if(tries == 0){
     printf("Error: Reached maximum number of tries\n");
@@ -506,12 +335,6 @@ int main(int argc, char** argv)
     newtio.c_cc[VMIN]     = 1;   /* blocking read until 5 chars received */
 
 
-
-  /* 
-    VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a 
-    leitura do(s) pr�ximo(s) caracter(es)
-  */
-
 	  tcflush(fd, TCIOFLUSH);
 
     if ( tcsetattr(fd,TCSANOW,&newtio) == -1) {
@@ -521,7 +344,15 @@ int main(int argc, char** argv)
 
     printf("New termios structure set\n\n");
 
-    (void) signal(SIGALRM, atende); //criar handler para sigalarm
+    struct sigaction newAction, oldAction;
+
+    newAction.sa_handler = atende;
+    sigemptyset(&newAction.sa_mask);
+    newAction.sa_flags = 0;
+
+    sigaction(SIGALRM, &newAction, &oldAction);
+
+    clock_t start_t = clock();
 
     printf("[Establishing connection...]\n");
 
@@ -556,8 +387,9 @@ int main(int argc, char** argv)
 
     printf("First control packet sent\n\n");
     
-    int numPackets = 1;
+    int numPackets = 0;
     int totalPackets = fileSize / MAX_PACKET_SIZE;
+    int totalSize = 0;
 
     if(fileSize % MAX_PACKET_SIZE != 0) {
       totalPackets++;
@@ -566,8 +398,10 @@ int main(int argc, char** argv)
     printf("[Sending data packets...]\n");
     
     //send message packets
-    while(numPackets <= totalPackets) {
+    while(numPackets < totalPackets) {
       unsigned char *data = splitFileData(file, fileSize, numPackets, &packetSize);
+
+      totalSize += packetSize;
 
       unsigned char *dataPacket = buildDataPacket(data, &numPackets, &packetSize);
 
@@ -576,10 +410,11 @@ int main(int argc, char** argv)
         exit(1);
       }
 
-      printf("Sent data packet number %d with %d bytes\n", numPackets - 1, packetSize - 4);
+      printf("Sent data packet number %d with %d bytes\n", numPackets, packetSize - 4);
     }
 
-    printf("Data packets sent\n\n");
+    printf("All data packets sent\n");
+    printf("Total size: %d bytes\n\n", totalSize);
 
     controlPacket = buildControlPacket(CONTROL_PACKET_END, fileSize, fileName, &packetSize);
 
@@ -599,24 +434,21 @@ int main(int argc, char** argv)
       exit(1);
     }
 
-    printf("Connection successfully closed\n");
- 
+    printf("Connection successfully closed\n\n");
 
-  /* 
-    O ciclo FOR e as instru��es seguintes devem ser alterados de modo a respeitar 
-    o indicado no gui�o 
-  */
+    clock_t end_t = clock();
 
-
+    printf("[Protocol Efficiency Statistics:]\n");
+    printf("Elapsed time: %f seconds\n", (end_t - start_t) / (double) CLOCKS_PER_SEC);
+    printf("Number of information frames sent: %d\n", framesSent);
+    printf("Number of packets rejected (REJ frames received): %d\n", REJcount);
+    printf("Number of packets accepted (RR frames received): %d\n", RRcount);
 
    
-    if ( tcsetattr(fd,TCSANOW,&oldtio) == -1) {
+    if (tcsetattr(fd,TCSANOW,&oldtio) == -1) {
       perror("tcsetattr");
       exit(-1);
     }
-
-
-
 
     close(fd);
     return 0;
