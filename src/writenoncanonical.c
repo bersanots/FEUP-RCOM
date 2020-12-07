@@ -55,20 +55,7 @@ int llopen(int fd) {
     alarm(TIMEOUT);
       
     printf("Receiving UA... ");
-<<<<<<< HEAD
-    while (index < 5) {
-      res = read(fd,buf,1);
-      printf("%4X\n", buf[index]);
-      if (res == -1) {
-        break;
-      }
-      buf[res] = 0;
-      readTotalBytes += res;
-      message[index++] = buf[0];
-    }
-=======
     unsigned char response = getSUframe(fd);
->>>>>>> 950c45c6e2e3081b89f1d1ac7cdbde0d6bb1f026
 
     if(response == CONTROL_UA) {
       printf("UA received\n");
