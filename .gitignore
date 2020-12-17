@@ -1,5 +1,5 @@
 #Everything except .c or .h files
-*
+*/*
 !*.c
 !*.h
 
