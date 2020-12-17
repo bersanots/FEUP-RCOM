@@ -2,7 +2,7 @@ CC = gcc
 
 all: download
 
-write: writenoncanonical.c
+download: clientTCP.c
 	$(CC) -w -o download clientTCP.c
 
 clean:
