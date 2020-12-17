@@ -34,8 +34,8 @@ struct hostent *getip(char host[])
         exit(1);
     }
 
-    printf("Host name  : %s\n", h->h_name);
-    printf("IP Address : %s\n", inet_ntoa(*((struct in_addr *)h->h_addr)));
+    printf("Host name: %s\n", h->h_name);
+    printf("IP Address: %s\n", inet_ntoa(*((struct in_addr *)h->h_addr)));
 
     return h;
 }
@@ -67,6 +67,48 @@ int createAndConnectToSocket(char *ip)
         exit(0);
     }
 
+    return sockfd;
+}
+
+int readSocket(int sockfd, char *response)
+{
+    int state = 0;
+    int index = 0;
+    char c;
+
+    while (state < 2)
+    {
+        read(sockfd, &c, 1);
+        printf("%c", c);
+        switch (state)
+        {
+        //check for 3 digit code followed by ' '
+        case 0:
+            if (c == ' ')
+            {
+                if (index != 3)
+                {
+                    printf("Error receiving response code\n");
+                    return -1;
+                }
+                state = 1;
+                index = 0;
+            }
+            else if (isdigit(c))
+            {
+                response[index] = c;
+                index++;
+            }
+            break;
+        //read until line ending
+        case 1:
+            if (c == '\n')
+            {
+                state = 2;
+            }
+            break;
+        }
+    }
     return 0;
 }
 
@@ -176,6 +218,21 @@ int main(int argc, char **argv)
     if ((sockfd = createAndConnectToSocket(inet_ntoa(*((struct in_addr *)h->h_addr)))) == -1)
     {
         herror("error when creating socket or connecting");
+        exit(1);
+    }
+
+    char response[3];
+
+    readSocket(sockfd, response);
+
+    //positive completion reply
+    if (response[0] == '2')
+    {
+        printf("FTP connection established\n");
+    }
+    else
+    {
+        herror("FTP connection denied");
         exit(1);
     }
 
