@@ -40,18 +40,17 @@ struct hostent *getip(char host[])
     return h;
 }
 
-int createAndConnectToSocket(char *ip)
+int createAndConnectToSocket(char *ip, int port)
 {
     int sockfd;
     struct sockaddr_in server_addr;
     char buf[] = "Mensagem de teste na travessia da pilha TCP/IP\n";
-    int bytes;
 
     /*server address handling*/
     bzero((char *)&server_addr, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = inet_addr(ip); /*32 bit Internet address network byte ordered*/
-    server_addr.sin_port = htons(SERVER_PORT);   /*server TCP port must be network byte ordered */
+    server_addr.sin_port = htons(port);          /*server TCP port must be network byte ordered */
 
     /*open an TCP socket*/
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
@@ -72,43 +71,24 @@ int createAndConnectToSocket(char *ip)
 
 int readSocket(int sockfd, char *response)
 {
-    int state = 0;
     int index = 0;
     char c;
+    int foundCode = 0;
 
-    while (state < 2)
+    do
     {
         read(sockfd, &c, 1);
-        printf("%c", c);
-        switch (state)
-        {
-        //check for 3 digit code followed by ' '
-        case 0:
-            if (c == ' ')
-            {
-                if (index != 3)
-                {
-                    printf("Error receiving response code\n");
-                    return -1;
-                }
-                state = 1;
-                index = 0;
-            }
-            else if (isdigit(c))
-            {
-                response[index] = c;
-                index++;
-            }
-            break;
-        //read until line ending
-        case 1:
-            if (c == '\n')
-            {
-                state = 2;
-            }
-            break;
-        }
+        response[index] = c;
+        index++;
+    } while (c != '\n');
+
+    //check for 3 digit code followed by ' '
+    if (!isdigit(response[0]) || !isdigit(response[1]) || !isdigit(response[2]) || response[3] != ' ')
+    {
+        printf("Error receiving response code\n");
+        return 1;
     }
+
     return 0;
 }
 
@@ -192,17 +172,101 @@ int divideUrl(char url[255], int size, struct UrlInfo *urlInfo)
     return 0;
 }
 
+int sendCommand(int sockfd, const char *command, char *commandValue, char *response)
+{
+    int bytes = 0;
+
+    //send the command to the server
+    bytes += write(sockfd, command, strlen(command));
+    bytes += write(sockfd, commandValue, strlen(commandValue));
+    bytes += write(sockfd, "\n", 1);
+
+    if (bytes <= 0)
+    {
+        perror("Error sending command\n");
+        return 1;
+    }
+
+    printf("%s%s - %d bytes written\n", command, commandValue, bytes);
+
+    printf("Server response: \n");
+
+    if (readSocket(sockfd, response) != 0)
+    {
+        perror("Error reading from socket\n");
+        return 1;
+    };
+
+    printf("%s", response);
+
+    return 0;
+}
+
+int getIpAndPort(int sockfd, char *ip, int *portNum, char *string)
+{
+    if (strlen(string) < 39 || string[26] != '(')
+    {
+        perror("Invalid string\n");
+        return 1;
+    }
+
+    char value[4];
+    int port[2];
+    int stringIdx = 27, valueIdx = 0, ipIdx = 0, portIdx = 0, ipCnt = 0;
+    char c;
+
+    do
+    {
+        c = string[stringIdx];
+        if (c == ',' || c == ')')
+        {
+            if (ipCnt < 4)
+            {
+                if (ipCnt < 3)
+                    ip[ipIdx] = '.';
+                ipIdx++;
+                ipCnt++;
+            }
+            else if (portIdx < 2)
+            {
+                port[portIdx] = atoi(value);
+                portIdx++;
+                bzero(value, 4);
+                valueIdx = 0;
+            }
+        }
+        else if (isdigit(c))
+        {
+            if (ipCnt < 4)
+            {
+                ip[ipIdx] = c;
+                ipIdx++;
+            }
+            else if (portIdx < 2)
+            {
+                value[valueIdx] = c;
+                valueIdx++;
+            }
+        }
+        stringIdx++;
+    } while (c != ')');
+
+    //calculate TCP port number
+    *portNum = port[0] * 256 + port[1];
+
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     struct UrlInfo urlInfo;
-    int sockfd, bytes;
-    char buf[255];
+    int sockfd;
     struct hostent *h;
 
     if (argc < 2)
     {
         printf("Error: You must provide an url as an argument.\n");
-        exit(2);
+        exit(1);
     }
 
     divideUrl(argv[1], strlen(argv[1]), &urlInfo);
@@ -215,30 +279,104 @@ int main(int argc, char **argv)
 
     h = getip(urlInfo.host);
 
-    if ((sockfd = createAndConnectToSocket(inet_ntoa(*((struct in_addr *)h->h_addr)))) == -1)
+    if ((sockfd = createAndConnectToSocket(inet_ntoa(*((struct in_addr *)h->h_addr)), SERVER_PORT)) == -1)
     {
-        herror("error when creating socket or connecting");
+        perror("Error when creating or connecting to socket");
         exit(1);
     }
 
-    char response[3];
+    printf("\n");
 
-    readSocket(sockfd, response);
+    char response[255];
+    bzero(response, 255);
 
-    //positive completion reply
-    if (response[0] == '2')
+    printf("Server response: \n");
+
+    if (readSocket(sockfd, response))
     {
+        perror("Error reading from socket\n");
+        exit(1);
+    }
+    else if (response[0] == '2')
+    {
+        printf("%s", response);
         printf("FTP connection established\n");
     }
     else
     {
-        herror("FTP connection denied");
+        perror("FTP connection denied");
         exit(1);
     }
 
-    /*send a string to the server*/
-    /*bytes = write(sockfd, buf, strlen(buf));
-    printf("Bytes escritos %d\n", bytes);*/
+    printf("\n");
+
+    bzero(response, 255);
+    printf("Sending username...\n");
+    if (sendCommand(sockfd, "user ", urlInfo.user, response))
+    {
+        perror("Error sending user command\n");
+        exit(1);
+    }
+    else if (response[0] <= '5')
+    {
+        printf("Username sent\n");
+    }
+    else
+    {
+        perror("Username command denied");
+        exit(1);
+    }
+
+    printf("\n");
+
+    bzero(response, 255);
+    printf("Sending password...\n");
+    if (sendCommand(sockfd, "pass ", urlInfo.password, response))
+    {
+        perror("Error sending password command\n");
+        exit(1);
+    }
+    else if (response[0] == '2')
+    {
+        printf("Password sent\n");
+    }
+    else
+    {
+        perror("Password command denied");
+        exit(1);
+    }
+
+    printf("\n");
+
+    bzero(response, 255);
+    printf("Entering passive mode...\n");
+    if (sendCommand(sockfd, "pasv", "", response))
+    {
+        perror("Error sending passive mode command");
+        exit(1);
+    }
+    else if (response[0] != '2')
+    {
+        perror("Passive mode command denied");
+        exit(1);
+    }
+
+    int port;
+    char ip[32];
+
+    if (getIpAndPort(sockfd, ip, &port, response))
+    {
+        perror("Error getting IP and Port\n");
+        exit(1);
+    }
+
+    if ((sockfd = createAndConnectToSocket(ip, port)) == -1)
+    {
+        perror("Error when creating or connecting to socket");
+        exit(1);
+    }
+
+    printf("Entered passive mode\n\n");
 
     close(sockfd);
     exit(0);
