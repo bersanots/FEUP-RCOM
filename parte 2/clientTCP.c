@@ -11,6 +11,7 @@
 #include <netdb.h>
 #include <strings.h>
 #include <string.h>
+#include <fcntl.h>
 
 #define SERVER_PORT 21
 #define SERVER_ADDR "192.168.28.96"
@@ -172,7 +173,7 @@ int divideUrl(char url[255], int size, struct UrlInfo *urlInfo)
     return 0;
 }
 
-int sendCommand(int sockfd, const char *command, char *commandValue, char *response)
+int sendCommand(int sockfd, int readSock, const char *command, char *commandValue, char *response)
 {
     int bytes = 0;
 
@@ -189,15 +190,16 @@ int sendCommand(int sockfd, const char *command, char *commandValue, char *respo
 
     printf("%s%s - %d bytes written\n", command, commandValue, bytes);
 
-    printf("Server response: \n");
-
-    if (readSocket(sockfd, response) != 0)
+    if (readSock)
     {
-        perror("Error reading from socket\n");
-        return 1;
-    };
+        if (readSocket(sockfd, response) != 0)
+        {
+            perror("Error reading from socket\n");
+            return 1;
+        };
 
-    printf("%s", response);
+        printf("Server response: %s", response);
+    }
 
     return 0;
 }
@@ -257,6 +259,40 @@ int getIpAndPort(int sockfd, char *ip, int *portNum, char *string)
     return 0;
 }
 
+int downloadFile(int fd, char *filename)
+{
+    char buf[255];
+    int file_fd;
+    int size;
+
+    if ((file_fd = open(filename, O_WRONLY | O_CREAT, 0666)) < 0)
+    {
+        perror("Error opening file\n");
+        return 1;
+    }
+
+    while ((size = read(fd, buf, 255)) > 0)
+    {
+        if (size == -1)
+        {
+            perror("Error reading file\n");
+            return 1;
+        }
+
+        if (write(file_fd, buf, size) == -1)
+        {
+            perror("Error writing file\n");
+            return 1;
+        }
+    }
+
+    close(file_fd);
+
+    printf("File %s was downloaded\n", filename);
+
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     struct UrlInfo urlInfo;
@@ -290,7 +326,7 @@ int main(int argc, char **argv)
     char response[255];
     bzero(response, 255);
 
-    printf("Server response: \n");
+    printf("Server response: ");
 
     if (readSocket(sockfd, response))
     {
@@ -312,7 +348,7 @@ int main(int argc, char **argv)
 
     bzero(response, 255);
     printf("Sending username...\n");
-    if (sendCommand(sockfd, "user ", urlInfo.user, response))
+    if (sendCommand(sockfd, 1, "user ", urlInfo.user, response))
     {
         perror("Error sending user command\n");
         exit(1);
@@ -331,7 +367,7 @@ int main(int argc, char **argv)
 
     bzero(response, 255);
     printf("Sending password...\n");
-    if (sendCommand(sockfd, "pass ", urlInfo.password, response))
+    if (sendCommand(sockfd, 1, "pass ", urlInfo.password, response))
     {
         perror("Error sending password command\n");
         exit(1);
@@ -350,7 +386,7 @@ int main(int argc, char **argv)
 
     bzero(response, 255);
     printf("Entering passive mode...\n");
-    if (sendCommand(sockfd, "pasv", "", response))
+    if (sendCommand(sockfd, 1, "pasv", "", response))
     {
         perror("Error sending passive mode command");
         exit(1);
@@ -377,6 +413,19 @@ int main(int argc, char **argv)
     }
 
     printf("Entered passive mode\n\n");
+
+    bzero(response, 255);
+    printf("Sending retr...\n");
+    if (sendCommand(sockfd, 0, "retr ", urlInfo.urlPath, response))
+    {
+        perror("Error sending retr command\n");
+        exit(1);
+    }
+
+    printf("Retr sent\n");
+
+    printf("Downloading file...\n");
+    downloadFile(sockfd, urlInfo.filename);
 
     close(sockfd);
     exit(0);
