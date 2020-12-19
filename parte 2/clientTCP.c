@@ -74,21 +74,24 @@ int readSocket(int sockfd, char *response)
 {
     int index = 0;
     char c;
-    int foundCode = 0;
-
-    do
-    {
-        read(sockfd, &c, 1);
-        response[index] = c;
-        index++;
-    } while (c != '\n');
 
     //check for 3 digit code followed by ' '
-    if (!isdigit(response[0]) || !isdigit(response[1]) || !isdigit(response[2]) || response[3] != ' ')
+    do
     {
-        printf("Error receiving response code\n");
-        return 1;
-    }
+        memset(response, 0, 255);
+        index = 0;
+        do
+        {
+            if (read(sockfd, &c, 1) == -1)
+            {
+                perror("Error reading from socket");
+                return 1;
+            }
+            response[index] = c;
+            index++;
+        } while (c != '\n');
+        printf("%s", response);
+    } while (!isdigit(response[0]) || !isdigit(response[1]) || !isdigit(response[2]) || response[3] != ' ');
 
     return 0;
 }
@@ -197,14 +200,12 @@ int sendCommand(int sockfd, int readSock, const char *command, char *commandValu
             perror("Error reading from socket\n");
             return 1;
         };
-
-        printf("Server response: %s", response);
     }
 
     return 0;
 }
 
-int getIpAndPort(int sockfd, char *ip, int *portNum, char *string)
+int getIpAndPort(char *ip, int *portNum, char *string)
 {
     if (strlen(string) < 39 || string[26] != '(')
     {
@@ -259,19 +260,19 @@ int getIpAndPort(int sockfd, char *ip, int *portNum, char *string)
     return 0;
 }
 
-int downloadFile(int fd, char *filename)
+int downloadFile(int sockfd, char *filename)
 {
     char buf[255];
-    int file_fd;
+    int filefd;
     int size;
 
-    if ((file_fd = open(filename, O_WRONLY | O_CREAT, 0666)) < 0)
+    if ((filefd = open(filename, O_WRONLY | O_CREAT, 0666)) < 0)
     {
         perror("Error opening file\n");
         return 1;
     }
 
-    while ((size = read(fd, buf, 255)) > 0)
+    while ((size = read(sockfd, buf, 255)) != 0)
     {
         if (size == -1)
         {
@@ -279,14 +280,14 @@ int downloadFile(int fd, char *filename)
             return 1;
         }
 
-        if (write(file_fd, buf, size) == -1)
+        if (write(filefd, buf, size) == -1)
         {
             perror("Error writing file\n");
             return 1;
         }
     }
 
-    close(file_fd);
+    close(filefd);
 
     printf("File %s was downloaded\n", filename);
 
@@ -296,7 +297,7 @@ int downloadFile(int fd, char *filename)
 int main(int argc, char **argv)
 {
     struct UrlInfo urlInfo;
-    int sockfd;
+    int sockfd, sockfd2;
     struct hostent *h;
 
     if (argc < 2)
@@ -325,8 +326,6 @@ int main(int argc, char **argv)
 
     char response[255];
     bzero(response, 255);
-
-    printf("Server response: ");
 
     if (readSocket(sockfd, response))
     {
@@ -400,13 +399,13 @@ int main(int argc, char **argv)
     int port;
     char ip[32];
 
-    if (getIpAndPort(sockfd, ip, &port, response))
+    if (getIpAndPort(ip, &port, response))
     {
         perror("Error getting IP and Port\n");
         exit(1);
     }
 
-    if ((sockfd = createAndConnectToSocket(ip, port)) == -1)
+    if ((sockfd2 = createAndConnectToSocket(ip, port)) == -1)
     {
         perror("Error when creating or connecting to socket");
         exit(1);
@@ -422,11 +421,12 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    printf("Retr sent\n");
+    printf("Retr sent\n\n");
 
     printf("Downloading file...\n");
-    downloadFile(sockfd, urlInfo.filename);
+    downloadFile(sockfd2, urlInfo.filename);
 
     close(sockfd);
+    close(sockfd2);
     exit(0);
 }
