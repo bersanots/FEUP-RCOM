@@ -335,11 +335,11 @@ int main(int argc, char **argv)
     else if (response[0] == '2')
     {
         printf("%s", response);
-        printf("FTP connection established\n");
+        printf("TCP connection established\n");
     }
     else
     {
-        perror("FTP connection denied");
+        perror("TCP connection denied");
         exit(1);
     }
 
